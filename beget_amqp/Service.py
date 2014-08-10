@@ -79,11 +79,19 @@ class Service():
                 worker.start()
                 self._worker_container.append(worker)
 
-            for worker in self._worker_container:  # Delete killed workers from array
-                if not worker.is_alive():
-                    self._worker_container.remove(worker)
+            self._delete_dead_workers()
 
             time.sleep(1)
+
+    def _delete_dead_workers(self):
+        workers_for_delete = set()
+
+        for index, worker in enumerate(self._worker_container):
+            if not worker.is_alive():
+                workers_for_delete.add(index)
+
+        for worker_index in workers_for_delete:
+            del self._worker_container[worker_index]
 
     def stop(self):
         for worker in self._worker_container:
