@@ -5,7 +5,7 @@ from .lib.dependence.dependence_sync_manager import DependenceSyncManager
 import time
 import signal
 import sys
-
+import logging
 
 class Service():
 
@@ -41,6 +41,8 @@ class Service():
             self.handler.set_prefix(controllers_prefix)
         self.controller_callback = self.handler.on_message
 
+        self.logger = logging.getLogger()
+
         self.host = host
         self.user = user
         self.password = password
@@ -60,11 +62,13 @@ class Service():
         signal.signal(signal.SIGINT, self.sig_handler)
         signal.signal(signal.SIGTERM, self.sig_handler)
 
-    @staticmethod
-    def sig_handler(signal, frame):
-        sys.exit()
+    def sig_handler(self, signal, frame):
+        self.logger.info('try kill workers')
+        self.stop()
+        sys.exit(1)
 
     def start(self):
+        self.logger.info('start Service')
         self._status = self.STATUS_START
 
         while True:
@@ -94,5 +98,8 @@ class Service():
             del self._worker_container[worker_index]
 
     def stop(self):
+        self.logger.info('stop Service')
+        self._status = self.STATUS_STOP
         for worker in self._worker_container:
-            worker.terminate()
+            if worker.is_alive():
+                worker.terminate()

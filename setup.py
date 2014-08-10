@@ -9,7 +9,7 @@ except ImportError:
 package_folder = 'beget_amqp'
 
 setup(name=package_folder,
-      version='0.1.3',
+      version='0.1.4',
       description='AMQP server with Workers, Manager, Callbacks and queue by tag',
       author='LTD Beget',
       author_email='support@beget.ru',

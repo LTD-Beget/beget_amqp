@@ -3,7 +3,10 @@
 from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
-
+import signal
+import os
+import sys
+import logging
 
 class AmqpWorker(Process):
 
@@ -26,6 +29,7 @@ class AmqpWorker(Process):
 
         Process.__init__(self)
 
+        self.logger = logging.getLogger()
         self.host = host
         self.user = user
         self.password = password
@@ -39,11 +43,17 @@ class AmqpWorker(Process):
         self.no_ack = no_ack
 
         self.dependence_sync_manager = dependence_sync_manager
-
         self.id = str(id) if id else "None"
+
+    def sig_handler(self, signal, frame):
+        self.logger.debug('killing worker with pid: %s', os.getpid())
+        self.stop()
+        sys.exit(1)
 
     #////////////////////////////////////////////////////////////////////////////
     def run(self):
+        signal.signal(signal.SIGTERM, self.sig_handler)
+        signal.signal(signal.SIGINT, self.sig_handler)
         amqp_listen = AmqpListen(self.host,
                                  self.user,
                                  self.password,
@@ -57,6 +67,7 @@ class AmqpWorker(Process):
 
     #////////////////////////////////////////////////////////////////////////////
     def _on_message(self, ch, method, properties, body):
+        self.logger.debug('get message properties: %s   body: %s', properties, body)
         message_constructor = MessageConstructor()
         message_amqp = message_constructor.create_message_amqp(properties, body)
         self.set_dependence(message_amqp)
@@ -82,3 +93,6 @@ class AmqpWorker(Process):
     def release_dependence(self, message_amqp):
         if message_amqp.dependence:
             self.dependence_sync_manager.release(message_amqp)
+
+    def stop(self):
+        self.logger.debug('stop worker')
