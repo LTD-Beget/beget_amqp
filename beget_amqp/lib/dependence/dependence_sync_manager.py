@@ -3,12 +3,13 @@ import multiprocessing
 from multiprocessing.managers import BaseManager
 from multiprocessing import Lock
 import time
-
+import logging
 
 class DependenceSyncManager(object):
     def __init__(self):
         self.dict_of_queue = {}
         self.lock = Lock()
+        self.logger = logging.getLogger('beget_amqp')
 
     #////////////////////////////////////////////////////////////////////////////
     def set_and_wait(self, message):
@@ -20,6 +21,7 @@ class DependenceSyncManager(object):
         """
         infinity loop until I got permission to continue
         """
+        self.logger.debug('DependenceSyncManager: wait-dependence: %s', repr(message.dependence))
         while True:
             if self.is_available_dependence(message):
                 return True
@@ -41,6 +43,7 @@ class DependenceSyncManager(object):
         """
         Set our dependencies in queue
         """
+        self.logger.debug('DependenceSyncManager: set-dependence: %s', repr(message.dependence))
         self.lock.acquire()  # in one moment only one worker may write dependence. Otherwise we may get deadlock.
         for dep in message.dependence:
             if dep in self.dict_of_queue:
@@ -54,6 +57,7 @@ class DependenceSyncManager(object):
         """
         Release our dependencies from queue
         """
+        self.logger.debug('DependenceSyncManager: release-dependence: %s', repr(message.dependence))
         for dep in message.dependence:
             if dep in self.dict_of_queue:
                 while message.id in self.dict_of_queue[dep]:

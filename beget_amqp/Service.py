@@ -7,6 +7,7 @@ import signal
 import sys
 import logging
 
+
 class Service():
 
     STATUS_START = 1
@@ -37,11 +38,11 @@ class Service():
             from .Handler import Handler as AmqpHandler
             self.handler = AmqpHandler()
 
-        if 'set_prefix' in dir(self.handler):
+        if hasattr(self.handler, 'set_prefix'):
             self.handler.set_prefix(controllers_prefix)
         self.controller_callback = self.handler.on_message
 
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger('beget_amqp')
 
         self.host = host
         self.user = user
@@ -63,16 +64,17 @@ class Service():
         signal.signal(signal.SIGTERM, self.sig_handler)
 
     def sig_handler(self, signal, frame):
-        self.logger.info('try kill workers')
+        self.logger.info('Service: try kill workers')
         self.stop()
         sys.exit(1)
 
     def start(self):
-        self.logger.info('start Service')
+        self.logger.info('Service: start Service')
         self._status = self.STATUS_START
 
         while True:
             while self.number_workers > len(self._worker_container) and self._status == self.STATUS_START:
+                self.logger.debug('Service: Create worker-%s of %s', (len(self._worker_container) + 1), self.number_workers)
                 worker = AmqpWorker(self.host,
                                     self.user,
                                     self.password,
@@ -83,22 +85,24 @@ class Service():
                 worker.start()
                 self._worker_container.append(worker)
 
+            if self.number_workers < len(self._worker_container):
+                self.logger.debug('Service: current count workers: %s but maximum: %s',
+                                  len(self._worker_container),
+                                  self.number_workers)
+
             self._delete_dead_workers()
 
             time.sleep(1)
 
     def _delete_dead_workers(self):
-        workers_for_delete = set()
-
-        for index, worker in enumerate(self._worker_container):
+        for worker in self._worker_container:
             if not worker.is_alive():
-                workers_for_delete.add(index)
-
-        for worker_index in workers_for_delete:
-            del self._worker_container[worker_index]
+                self._worker_container.remove(worker)
+                self._delete_dead_workers()
+                break
 
     def stop(self):
-        self.logger.info('stop Service')
+        self.logger.info('Service: stop Service')
         self._status = self.STATUS_STOP
         for worker in self._worker_container:
             if worker.is_alive():

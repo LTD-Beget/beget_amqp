@@ -7,6 +7,8 @@ import signal
 import os
 import sys
 import logging
+import traceback
+
 
 class AmqpWorker(Process):
 
@@ -29,7 +31,7 @@ class AmqpWorker(Process):
 
         Process.__init__(self)
 
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger('beget_amqp')
         self.host = host
         self.user = user
         self.password = password
@@ -46,7 +48,7 @@ class AmqpWorker(Process):
         self.id = str(id) if id else "None"
 
     def sig_handler(self, signal, frame):
-        self.logger.debug('killing worker with pid: %s', os.getpid())
+        self.logger.debug('Worker: killing worker with pid: %s', os.getpid())
         self.stop()
         sys.exit(1)
 
@@ -67,7 +69,7 @@ class AmqpWorker(Process):
 
     #////////////////////////////////////////////////////////////////////////////
     def _on_message(self, ch, method, properties, body):
-        self.logger.debug('get message properties: %s   body: %s', properties, body)
+        self.logger.debug('Worker: get message properties: %s   body: %s', repr(properties), repr(body))
         message_constructor = MessageConstructor()
         message_amqp = message_constructor.create_message_amqp(properties, body)
         self.set_dependence(message_amqp)
@@ -76,7 +78,8 @@ class AmqpWorker(Process):
         try:
             self.callback(message_to_service)
         except Exception as e:
-            pass
+            self.logger.error('Worker->_on_message->callback Exception: %s\n'
+                              'Traceback: ', e.message, traceback.format_exc())
         self.release_dependence(message_amqp)
 
     #////////////////////////////////////////////////////////////////////////////
@@ -95,4 +98,4 @@ class AmqpWorker(Process):
             self.dependence_sync_manager.release(message_amqp)
 
     def stop(self):
-        self.logger.debug('stop worker')
+        self.logger.debug('Worker: stop worker')

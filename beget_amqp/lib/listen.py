@@ -18,7 +18,8 @@ class AmqpListen:
                  auto_delete=True,
                  no_ack=True):
 
-        logging.basicConfig(level=logging.CRITICAL)  # TODO: Delete this from code
+        # logging.basicConfig(level=logging.CRITICAL)  # TODO: Delete this from code
+        self.logger = logging.getLogger()
 
         self.host = host
         self.user = user
@@ -36,6 +37,12 @@ class AmqpListen:
         self.listen()
 
     def listen(self):
+        self.logger.debug('AmqpListen: start listen: \n'
+                          'host: %s\n' % self.host +
+                          'port: %s\n' % self.port +
+                          'VH: %s\n' % self.virtual_host +
+                          'queue: %s' % self.queue)
+
         credentials = pika.PlainCredentials(self.user, self.password)
         connect_params = pika.ConnectionParameters(self.host, self.port, self.virtual_host, credentials)
 
@@ -45,6 +52,7 @@ class AmqpListen:
         try:
             channel.queue_declare(queue=self.queue, passive=True)
         except pika.exceptions.ChannelClosed:
+            self.logger.debug('AmqpListen: queue is not create. Process to create her.')
             channel = connection.channel()
             channel.queue_declare(queue=self.queue, durable=self.durable, auto_delete=self.auto_delete)
 
