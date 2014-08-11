@@ -18,8 +18,7 @@ class AmqpListen:
                  auto_delete=True,
                  no_ack=True):
 
-        # logging.basicConfig(level=logging.CRITICAL)  # TODO: Delete this from code
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger('beget_amqp')
 
         self.host = host
         self.user = user
