@@ -3,10 +3,10 @@
 from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
+from .logger import Logger
 import signal
 import os
 import sys
-import logging
 import traceback
 
 
@@ -31,7 +31,7 @@ class AmqpWorker(Process):
 
         Process.__init__(self)
 
-        self.logger = logging.getLogger('beget_amqp')
+        self.logger = Logger.get_logger()
         self.host = host
         self.user = user
         self.password = password
@@ -48,7 +48,7 @@ class AmqpWorker(Process):
         self.id = str(id) if id else "None"
 
     def sig_handler(self, signal, frame):
-        self.logger.debug('Worker: killing worker with pid: %s', os.getpid())
+        self.logger.debug('Worker(pid:%s): get signal %s and stop', os.getpid(), signal)
         self.stop()
         sys.exit(1)
 
@@ -56,30 +56,36 @@ class AmqpWorker(Process):
     def run(self):
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGINT, self.sig_handler)
-        amqp_listen = AmqpListen(self.host,
-                                 self.user,
-                                 self.password,
-                                 self.virtual_host,
-                                 self.queue,
-                                 self._on_message,
-                                 self.port,
-                                 self.durable,
-                                 self.auto_delete,
-                                 self.no_ack)
+        try:
+            amqp_listen = AmqpListen(self.host,
+                                     self.user,
+                                     self.password,
+                                     self.virtual_host,
+                                     self.queue,
+                                     self._on_message,
+                                     self.port,
+                                     self.durable,
+                                     self.auto_delete,
+                                     self.no_ack)
+        except Exception as e:
+            self.logger.error('Worker: Exception: %s'
+                              '  %s', e.message, traceback.format_exc())
 
     #////////////////////////////////////////////////////////////////////////////
     def _on_message(self, ch, method, properties, body):
-        self.logger.debug('Worker: get message properties: %s   body: %s', repr(properties), repr(body))
+        self.logger.debug('Worker: get message:\n'
+                          '  properties: %s\n'
+                          '  body: %s', repr(properties), repr(body))
         message_constructor = MessageConstructor()
         message_amqp = message_constructor.create_message_amqp(properties, body)
         self.set_dependence(message_amqp)
-        message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
-        self.wait_dependence(message_amqp)
         try:
+            message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
+            self.wait_dependence(message_amqp)
             self.callback(message_to_service)
         except Exception as e:
-            self.logger.error('Worker->_on_message->callback Exception: %s\n'
-                              'Traceback: ', e.message, traceback.format_exc())
+            self.logger.error('Worker: Exception: %s\n'
+                              '  %s', e.message, traceback.format_exc())
         self.release_dependence(message_amqp)
 
     #////////////////////////////////////////////////////////////////////////////

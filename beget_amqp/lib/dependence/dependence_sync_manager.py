@@ -3,13 +3,14 @@ import multiprocessing
 from multiprocessing.managers import BaseManager
 from multiprocessing import Lock
 import time
-import logging
+from ..logger import Logger
+
 
 class DependenceSyncManager(object):
     def __init__(self):
         self.dict_of_queue = {}
         self.lock = Lock()
-        self.logger = logging.getLogger('beget_amqp')
+        self.logger = Logger.get_logger()
 
     #////////////////////////////////////////////////////////////////////////////
     def set_and_wait(self, message):

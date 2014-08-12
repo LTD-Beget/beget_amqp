@@ -3,14 +3,14 @@ from __future__ import unicode_literals
 
 import sys
 import re
-import logging
 import traceback
+from .lib.logger import Logger
 
 
 class Handler(object):
 
     def __init__(self):
-        self.logger = logging.getLogger('beget_amqp')
+        self.logger = Logger.get_logger()
         self.controller_prefix = ''
 
     def set_prefix(self, controller_prefix):
@@ -26,10 +26,12 @@ class Handler(object):
             # message.failure_callback()
 
     def run_controller(self, message):
-        self.logger.debug('Handler->run_controller: get message: %s', repr(message))
+        self.logger.debug('Handler: get message: %s', repr(message))
         controller_class = self._get_class(str(message.controller))
 
-        self.logger.debug('Handler: use action: %s', message.action)
+        self.logger.debug('Handler: use:\n'
+                          '  action: %s\n'
+                          '  params: %s', message.action, message.params)
         target_controller = controller_class(message.action)
         method = getattr(target_controller, "run_action")
 
@@ -39,8 +41,9 @@ class Handler(object):
         target_module_name = "%s_controller" % self._from_camelcase_to_underscore(controller_name)
         target_cls_name = "%s%sController" % (controller_name[0].title(), controller_name[1:])
         full_controller_name = "%s.%s" % (self.controller_prefix, target_module_name)
-        self.logger.debug('Handler: get module controller: %s', full_controller_name)
-        self.logger.debug('Handler: get class controller: %s', target_cls_name)
+        self.logger.debug('Handler: use:\n'
+                          '  module of controller: %s\n'
+                          '  class in controller: %s', full_controller_name, target_cls_name)
         controllers_module = sys.modules[full_controller_name]
         controller_class = getattr(controllers_module, target_cls_name)
 

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
+import traceback
 import pika
-import logging
+from logger import Logger
 
 
 class AmqpSend:
 
     def __init__(self, host, user, password, virtual_host, queue, data=None, port=5672, ext_params=None):
-        logging.basicConfig(level=logging.CRITICAL)  # TODO: Delete this from code
+        self.logger = Logger.get_logger()
         self.host = host
         self.user = user
         self.password = password
@@ -18,13 +19,24 @@ class AmqpSend:
         self.ext_params = ext_params
 
     def send(self, data=None):
+        self.logger.debug('AmqpSend: message to send:'
+                          '  host: %s'
+                          '  port: %s'
+                          '  virtual host: %s'
+                          '  queue: %s'
+                          '  user: %s'
+                          '  pass: %s'
+                          '  data for send: %s', self.host, self.port, self.virtual_host, self.queue, self.user, self.password, data)
+
         credentials = pika.PlainCredentials(self.user, self.password)
         connect_params = pika.ConnectionParameters(self.host, self.port, self.virtual_host, credentials)
 
         try:
             connection = pika.BlockingConnection(connect_params)
             channel = connection.channel()
-        except:
+        except Exception as e:
+            self.logger.error('AmqpSend: Exception: %s'
+                              '  %s', e.message, traceback.format_exc())
             return False
 
         try:
@@ -36,7 +48,10 @@ class AmqpSend:
 
             channel.basic_publish('', self.queue, data)
             connection.close()
+            self.logger.info('AmqpSend: success send message to virtual host: %s  queue: %s', self.virtual_host, self.queue)
             return True
-        except:
+        except Exception as e:
+            self.logger.error('AmqpSend: Exception: %s'
+                              '  %s', e.message, traceback.format_exc())
             connection.close()
             return False

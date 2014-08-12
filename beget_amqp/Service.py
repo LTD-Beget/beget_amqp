@@ -5,7 +5,7 @@ from .lib.dependence.dependence_sync_manager import DependenceSyncManager
 import time
 import signal
 import sys
-import logging
+from .lib.logger import Logger
 
 
 class Service():
@@ -25,7 +25,10 @@ class Service():
                  auto_delete=False,
                  handler=None,
                  controllers_prefix=None,
+                 logger_name=None
                  ):
+
+        self.logger = Logger.get_logger(logger_name)
 
         if controllers_prefix is None and handler is None:
             raise Exception('Need set controllers_prefix or handler')
@@ -41,8 +44,6 @@ class Service():
         if hasattr(self.handler, 'set_prefix'):
             self.handler.set_prefix(controllers_prefix)
         self.controller_callback = self.handler.on_message
-
-        self.logger = logging.getLogger('beget_amqp')
 
         self.host = host
         self.user = user
@@ -64,14 +65,15 @@ class Service():
         signal.signal(signal.SIGTERM, self.sig_handler)
 
     def sig_handler(self, signal, frame):
-        self.logger.info('Service: try kill workers')
+        self.logger.critical("Service: get signal %s and stop", signal)
         self.stop()
         sys.exit(1)
 
     def start(self):
-        self.logger.info('Service: start Service')
-        self._status = self.STATUS_START
+        self.logger.info('Start service on host: %s,  port: %s,  VH: %s,  queue: %s',
+                         self.host, self.port, self.virtual_host, self.queue)
 
+        self._status = self.STATUS_START
         while True:
             while self.number_workers > len(self._worker_container) and self._status == self.STATUS_START:
                 self.logger.debug('Service: Create worker-%s of %s', (len(self._worker_container) + 1), self.number_workers)

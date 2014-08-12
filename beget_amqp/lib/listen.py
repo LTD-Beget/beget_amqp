@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pika
-import logging
+from logger import Logger
 
 
 class AmqpListen:
@@ -16,9 +16,10 @@ class AmqpListen:
                  port=5672,
                  durable=True,
                  auto_delete=True,
-                 no_ack=True):
+                 no_ack=True,
+                 timeout=5):
 
-        self.logger = logging.getLogger('beget_amqp')
+        self.logger = Logger.get_logger()
 
         self.host = host
         self.user = user
@@ -36,11 +37,13 @@ class AmqpListen:
         self.listen()
 
     def listen(self):
-        self.logger.debug('AmqpListen: start listen: \n'
-                          'host: %s\n' % self.host +
-                          'port: %s\n' % self.port +
-                          'VH: %s\n' % self.virtual_host +
-                          'queue: %s' % self.queue)
+        self.logger.debug('AmqpListen: start listen:\n'
+                          '  host: %s\n'
+                          '  port: %s\n'
+                          '  VH: %s\n'
+                          '  queue: %s\n'
+                          '  user: %s\n'
+                          '  pass: %s', self.host, self.port, self.virtual_host, self.queue, self.user, self.password)
 
         credentials = pika.PlainCredentials(self.user, self.password)
         connect_params = pika.ConnectionParameters(self.host, self.port, self.virtual_host, credentials)
@@ -57,27 +60,3 @@ class AmqpListen:
 
         channel.basic_consume(self.callback, queue=self.queue, no_ack=self.no_ack)
         channel.start_consuming()
-
-
-if __name__ == '__main__':
-
-    def my_callback(ch, method, properties, body):
-        print """
-        === get message
-        chanel: %s
-        detail chanel: %s
-        method: %s
-        detail method: %s
-        properties: %s
-        detail properties: %s
-        body:%s'
-        """ % (ch, ch.__dict__, method, method.__dict__, properties, properties.__dict__, body)
-
-    import config_for_test as conf
-
-    amqpSend = AmqpListen(conf.AMQP_HOST,
-                          conf.AMQP_USER,
-                          conf.AMQP_PASS,
-                          conf.AMQP_EXCHANGE,
-                          conf.AMQP_QUEUE,
-                          my_callback)
