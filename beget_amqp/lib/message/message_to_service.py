@@ -6,6 +6,9 @@ from message_interface import MessageInterface
 
 
 class MessageToService(Message):
+    """
+    Сообщение передачи его в callback, handler
+    """
     def __init__(self, controller, action, params=None, success_callback=None, failure_callback=None):
         Message.__init__(self, controller, action, params)
         self.success_callback = success_callback if isinstance(success_callback, Message) else {}

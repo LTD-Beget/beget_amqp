@@ -26,7 +26,7 @@ class Sender:
 if __name__ == '__main__':
     import config_for_test as conf
 
-    msg = {'controller': 'test', 'action': 'test', 'params': {'some_arg': 'myMsg'}}
+    msg = {'controller': 'test', 'action': 'kill_me', 'params': {'sleep_time': 30}}
 
     Sender.send('amqp://' + conf.AMQP_USER +
                 ':' + conf.AMQP_PASS +

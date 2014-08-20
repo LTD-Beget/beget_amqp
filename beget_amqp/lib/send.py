@@ -4,6 +4,8 @@ import traceback
 import pika
 from logger import Logger
 
+# TODO реализовать с зависимостями
+
 
 class AmqpSend:
 
