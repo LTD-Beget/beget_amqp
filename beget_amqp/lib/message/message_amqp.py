@@ -9,6 +9,9 @@ from message_callback import MessageCallback
 
 
 class MessageAmqp(MessageToService, MessageCallback):
+    """
+    Сообщение для обработки внутри модуля
+    """
     VERSION = "1.0"
 
     def __init__(self,

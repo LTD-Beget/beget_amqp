@@ -6,6 +6,8 @@ from message import Message
 from ..send import AmqpSend
 from ..config import AMQP_PASS, AMQP_HOST, AMQP_USER  # todo этого не должно быть
 
+# TODO реализовать с зависимостями
+
 
 class MessageCallback(Message):
 

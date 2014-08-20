@@ -5,6 +5,9 @@ from message_interface import MessageInterface
 
 
 class Message(MessageInterface):
+    """
+    Базовый класс сообщения
+    """
 
     controller = None
     action = None

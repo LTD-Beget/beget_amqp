@@ -3,6 +3,8 @@ from __future__ import unicode_literals
 
 import json
 
+# TODO реализовать с зависимостями
+
 
 class MessageCallback(object):
     TYPE_AMQP = "amqp"
@@ -14,7 +16,7 @@ class MessageCallback(object):
     def __init__(self):
         self.type = None
         self.event = None
-        self.neededParams = {}
+        self.needed_params = {}
 
         self.controller = None
         self.action = None
@@ -42,7 +44,7 @@ class MessageCallback(object):
         msg = {
             "type": self.type,
             "event": self.event,
-            "neededParams": self.neededParams,
+            "neededParams": self.needed_params,
             "controller": self.get_controller(),
             "action": self.get_action()
         }
