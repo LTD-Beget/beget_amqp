@@ -9,7 +9,7 @@ class Logger():
     Хранит состояние имени
     """
 
-    logger_name = 'beget_amqp'  # Имя лога которое будет использоваться по модулю
+    logger_name = 'beget.amqp'  # Имя лога которое будет использоваться по модулю
 
     def __init__(self):
         pass
