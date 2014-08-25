@@ -127,7 +127,8 @@ class AmqpWorker(Process):
                        '  %s', e.message, traceback.format_exc())
 
         self.debug('Report to AMQP about message being receive')
-        channel.basic_ack(delivery_tag=method.delivery_tag)
+        if not self.no_ack:
+            channel.basic_ack(delivery_tag=method.delivery_tag)
         self.release_dependence(message_amqp)
         self.working_status = self.WORKING_NOT
 

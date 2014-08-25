@@ -8,8 +8,12 @@ except ImportError:
 
 package_folder = 'beget_amqp'
 
+# Define __version__ without importing beget_amqp.
+# This allows building sdist without installing any 3rd party packages.
+exec(open(package_folder + '/_version.py').read())
+
 setup(name=package_folder,
-      version='0.1.8',
+      version=__version__,
       description='AMQP server with Workers, Manager, Callbacks and queue by tag',
       author='LTD Beget',
       author_email='support@beget.ru',
