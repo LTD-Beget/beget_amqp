@@ -114,6 +114,10 @@ class AmqpWorker(Process):
         message_amqp = message_constructor.create_message_amqp(properties, body)
         message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
 
+        self.debug('Report to AMQP about message being receive')
+        if not self.no_ack:
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
         try:
@@ -126,9 +130,6 @@ class AmqpWorker(Process):
             self.error('Exception: %s\n'
                        '  %s', e.message, traceback.format_exc())
 
-        self.debug('Report to AMQP about message being receive')
-        if not self.no_ack:
-            channel.basic_ack(delivery_tag=method.delivery_tag)
         self.release_dependence(message_amqp)
         self.working_status = self.WORKING_NOT
 
