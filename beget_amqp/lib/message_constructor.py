@@ -23,8 +23,9 @@ class MessageConstructor:
         action = dict_params.get('action', None)
         params = dict_params.get('params', None)
         dependence = MessageConstructor._get_dependence(properties)
+        message_id = MessageConstructor._get_message_id(properties)
 
-        return MessageAmqp(controller, action, params, dependence=dependence)
+        return MessageAmqp(controller, action, params, dependence=dependence, message_id=message_id)
 
     @staticmethod
     def create_message_to_service(body):
@@ -58,3 +59,10 @@ class MessageConstructor:
         if not isinstance(headers, dict):
             return None
         return headers.get('dependence')
+
+    @staticmethod
+    def _get_message_id(properties):
+        """
+        Получаем уникальный id сообщения
+        """
+        return properties.message_id

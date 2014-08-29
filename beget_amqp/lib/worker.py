@@ -4,12 +4,15 @@ from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
 from .logger import Logger
+from .message_storage_redis import MessageStorageRedis
+
 import signal
 import os
-import sys
+import time
 import traceback
 import socket
 
+import setproctitle
 
 class AmqpWorker(Process):
 
@@ -18,6 +21,11 @@ class AmqpWorker(Process):
 
     STATUS_START = True  # Воркер продолжает работу
     STATUS_STOP = False  # Воркер завершает работу
+
+    MESSAGE_DONE_NOT = '0'  # Сообщение было отработано
+    MESSAGE_DONE_YES = '1'  # Сообщение еще не отработано
+
+    LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 2  # Время хранения информации в локальном хранилище
 
     def __init__(self,
                  host,
@@ -32,7 +40,8 @@ class AmqpWorker(Process):
                  auto_delete=False,
                  no_ack=False,
                  prefetch_count=1,
-                 uid=''):
+                 uid='',
+                 service_name=None):
         Process.__init__(self)
 
         self.logger = Logger.get_logger()
@@ -50,6 +59,8 @@ class AmqpWorker(Process):
         self.no_ack = no_ack
         self.prefetch_count = prefetch_count
         self.uid = uid
+        self.service_name = service_name or virtual_host + ':' + queue
+        self.redis_storage = MessageStorageRedis(worker_id=self.uid, service_name=self.service_name)
 
         # обнуляем
         self.amqp_listener = None
@@ -61,7 +72,13 @@ class AmqpWorker(Process):
         """
         Начинаем работать в качестве отдельного процесса.
         """
+        # Изменяем имя процесса для мониторинга
+        process_title = setproctitle.getproctitle()
+        process_title += '_' + self._name
+        setproctitle.setproctitle(process_title)
+
         self._name = self._name + '(' + str(os.getpid()) + ')'
+
         # Назначаем сигналы для выхода
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGHUP, self.sig_handler)
@@ -114,12 +131,33 @@ class AmqpWorker(Process):
         message_amqp = message_constructor.create_message_amqp(properties, body)
         message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
 
-        self.debug('Report to AMQP about message being receive')
-        if not self.no_ack:
-            channel.basic_ack(delivery_tag=method.delivery_tag)
+        # Проверяем в локальном хранилище, что это не дублирующая заявка
+        if self.redis_storage.is_duplicate_message(message_amqp):
+            if self.redis_storage.is_done_message(message_amqp):
+                self.sync_manager.remove_unacknowledged_message_id(message_amqp.id)
+                if not self.no_ack:
+                    self.debug('Acknowledge delivery_tag: %s', method.delivery_tag)
+                    channel.basic_ack(delivery_tag=method.delivery_tag)
+                return
+            else:
+                worker_id_alive_list = self.sync_manager.get_workers_id()
+                worker_id = self.redis_storage.get_worker_id_by_message(message_amqp)
+                if worker_id in worker_id_alive_list:
+                    # Todo: Rabbit don't allow get custom or another message.
+                    # Todo: Exclude the receipt of this message for this channel
+                    self.sync_manager.add_unacknowledged_message_id(message_amqp.id)
+                    time.sleep(30)
+                    if not self.no_ack:
+                        self.debug('No acknowledge delivery_tag: %s', method.delivery_tag)
+                        channel.basic_nack(delivery_tag=method.delivery_tag)
+                    return
+
+        # Сохраняем информацию о заявке в локальное хранилище
+        self.redis_storage.message_save(message_amqp)
 
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
+
         try:
             self.debug('Wait until the dependence be free')
             self.wait_dependence(message_amqp)
@@ -130,7 +168,11 @@ class AmqpWorker(Process):
             self.error('Exception: %s\n'
                        '  %s', e.message, traceback.format_exc())
 
+        self.redis_storage.message_set_done(message_amqp)
         self.release_dependence(message_amqp)
+        if not self.no_ack:
+            self.debug('Acknowledge delivery_tag: %s', method.delivery_tag)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
         self.working_status = self.WORKING_NOT
 
         # Если за время работы над сообщением мы получили команду выхода, то выходим
@@ -262,4 +304,3 @@ class AmqpWorker(Process):
 
     def error(self, msg, *args):
         self.logger.error('%s: ' + msg, self._name, *args)
-

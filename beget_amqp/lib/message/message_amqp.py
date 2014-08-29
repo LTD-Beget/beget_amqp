@@ -22,14 +22,15 @@ class MessageAmqp(MessageToService, MessageCallback):
                  failure_callback=None,
                  virtual_host=None,
                  queue=None,
-                 dependence=None):
+                 dependence=None,
+                 message_id=None):
 
         MessageToService.__init__(self, controller, action, params, success_callback, failure_callback)
         MessageCallback.__init__(self, virtual_host, queue, controller, action, params)
-
+        print 'MessageAmqp create with %s id' % message_id
         self.hostname = platform.node()
-        self.id = str(uuid.uuid4())
         self.dependence = dependence
+        self.id = message_id or str(uuid.uuid4())
 
     def __repr__(self):
         msg = {

@@ -36,8 +36,8 @@ class Service():
                  handler=None,
                  controllers_prefix=None,
                  logger_name=None,
-                 no_ack=False
-                 ):
+                 no_ack=False,
+                 service_name=None):
         """
         :param host:  может принимать как адрес, так и hostname, так и '' для прослушки всех интерфейсов.
         :param user:
@@ -62,6 +62,9 @@ class Service():
         :param logger_name:  Имя для логирования
         :param no_ack:  Игнорировать необходимость подтверждения сообщений.
                         (Все сообщения сразу будут выданы работникам, даже если они заняты)
+
+        :param service_name: Имя сервиса. Используется для ключа к локальному хранилищу
+        :type service_name: basestring
         """
 
         #Получаем логгер в начале, иначе другие классы могут получить другое имя для логера
@@ -84,7 +87,6 @@ class Service():
 
         # on_message хендлера является получателем сообщения
         self.controller_callback = self.handler.on_message
-
         self.host = host
         self.user = user
         self.password = password
@@ -96,9 +98,11 @@ class Service():
         self.durable = durable
         self.auto_delete = auto_delete
         self.no_ack = no_ack
+        self.service_name = service_name
 
         self._status = self.STATUS_STOP
         self._worker_container = []
+        self._worker_id_list_in_killed_process = []
         """:type : list[AmqpWorker]"""
         self._last_worker_id = 0
 
@@ -123,8 +127,11 @@ class Service():
         # Основной бесконечный цикл. Выход через сигналы или Exception
         while self._status == self.STATUS_START:
 
+            message_nack_list = self.sync_manager.get_unacknowledged_message_id_list()
+            worker_required_number = self.number_workers + len(message_nack_list)
+
             # Если воркеров меньше чем положено, создаем новых.
-            while self.number_workers > len(self._worker_container):
+            while worker_required_number > self.get_workers_alive_count():
                 self.logger.debug('Service: Create worker-%s of %s',
                                   (len(self._worker_container) + 1), self.number_workers)
 
@@ -143,10 +150,12 @@ class Service():
                                     uid=uid)
                 worker.start()
                 self._worker_container.append(worker)
+                self.sync_manager.add_worker_id(worker.uid)
 
-            if self.number_workers < len(self._worker_container):
+            if worker_required_number < self.get_workers_alive_count():
                 self.logger.debug('Service: current count workers: %s but maximum: %s',
                                   len(self._worker_container), self.number_workers)
+                self.stop_one_worker()
 
             # Если воркер умер, убераем его из расчета.
             self._delete_dead_workers()
@@ -162,6 +171,9 @@ class Service():
             if worker.is_alive():
                 continue
             self.sync_manager.release_all_dependence_by_worker_id(worker.uid)
+            self.sync_manager.remove_worker_id(worker.uid)
+            if worker.uid in self._worker_id_list_in_killed_process:
+                self._worker_id_list_in_killed_process.remove(worker.uid)
             self._worker_container.remove(worker)
             self._delete_dead_workers()
             break
@@ -252,3 +264,23 @@ class Service():
     @staticmethod
     def generate_uid():
         return str(uuid.uuid4())
+
+    def get_workers_alive_count(self):
+        workers_alive_count = len(self._worker_container) - len(self._worker_id_list_in_killed_process)
+        return workers_alive_count
+
+    def stop_one_worker(self):
+        for worker in self._worker_container:
+            try:
+                if not worker.is_alive():
+                    continue
+                if worker.uid in self._worker_id_list_in_killed_process:
+                    continue
+                os.kill(worker.pid, signal.SIGHUP)
+                self._worker_id_list_in_killed_process.append(worker.uid)
+                return True
+
+            except Exception as e:
+                self.logger.debug('Service: when send signal to worker: Exception: %s\n'
+                                  '  %s', e.message, traceback.format_exc())
+        return False

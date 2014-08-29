@@ -23,7 +23,9 @@ class Sender:
             channel = connection.channel()
             channel.queue_declare(queue=queue, durable=True, auto_delete=True)
 
-        channel.basic_publish('', queue, data, pika.BasicProperties(headers={'dependence': ['test']}))
+        message_id = str(uuid.uuid4())
+        print 'message_id:', message_id
+        channel.basic_publish('', queue, data, pika.BasicProperties(message_id=message_id, headers={'dependence': ['test']}))
         connection.close()
 
 if __name__ == '__main__':

@@ -33,6 +33,8 @@ from ..logger import Logger
 class SyncManager(object):
 
     def __init__(self):
+        self.workers_id_list = []
+        self.unacknowledged_message_id_list = []
         self.logger = Logger.get_logger()
         self.dict_of_queue = {}
         self.lock = Lock()
@@ -138,3 +140,31 @@ class SyncManager(object):
         creator_shared_manager = CreatorSharedManager()
         creator_shared_manager.start()
         return creator_shared_manager.SyncManager()
+
+    def get_workers_id(self):
+        return self.workers_id_list
+
+    def add_worker_id(self, worker_id):
+        self.logger.debug('SyncManager: Add worker id %s to list', worker_id)
+        return self.workers_id_list.append(worker_id)
+
+    def remove_worker_id(self, worker_id):
+        self.logger.debug('SyncManager: remove worker id %s from list', worker_id)
+        self.workers_id_list.remove(worker_id)
+
+    def get_unacknowledged_message_id_list(self):
+        return self.unacknowledged_message_id_list
+
+    def add_unacknowledged_message_id(self, id):
+        self.logger.debug('SyncManager: add unacknowledged message:', id)
+        if id in self.unacknowledged_message_id_list:
+            return False
+        self.unacknowledged_message_id_list.append(id)
+        return True
+
+    def remove_unacknowledged_message_id(self, id):
+        self.logger.debug('SyncManager: remove unacknowledged message:', id)
+        if id not in self.unacknowledged_message_id_list:
+            return False
+        self.unacknowledged_message_id_list.remove(id)
+        return True
