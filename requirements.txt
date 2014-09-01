@@ -1,1 +1,3 @@
 pika
+redis
+-e git://github.com/LTD-Beget/setproctitle.git#egg=setproctitle
