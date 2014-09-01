@@ -27,7 +27,6 @@ class MessageAmqp(MessageToService, MessageCallback):
 
         MessageToService.__init__(self, controller, action, params, success_callback, failure_callback)
         MessageCallback.__init__(self, virtual_host, queue, controller, action, params)
-        print 'MessageAmqp create with %s id' % message_id
         self.hostname = platform.node()
         self.dependence = dependence
         self.id = message_id or str(uuid.uuid4())
