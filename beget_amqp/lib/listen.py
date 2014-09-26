@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import pika
-from logger import Logger
+from pika.exceptions import ChannelClosed
+
+from .helpers.logger import Logger
 
 
 class AmqpListen:

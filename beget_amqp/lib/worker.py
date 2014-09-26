@@ -3,8 +3,11 @@
 from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
-from .logger import Logger
+from .helpers.logger import Logger
 from .message_storage_redis import MessageStorageRedis
+from ..Callbacker import Callbacker
+
+from .exception.CallbackData import CallbackData
 
 import signal
 import os
@@ -13,6 +16,7 @@ import traceback
 import socket
 
 import setproctitle
+
 
 class AmqpWorker(Process):
 
@@ -41,7 +45,8 @@ class AmqpWorker(Process):
                  no_ack=False,
                  prefetch_count=1,
                  uid='',
-                 service_name=None):
+                 service_name=None,
+                 sender=None):
         Process.__init__(self)
 
         self.logger = Logger.get_logger()
@@ -60,6 +65,7 @@ class AmqpWorker(Process):
         self.prefetch_count = prefetch_count
         self.uid = uid
         self.service_name = service_name or virtual_host + ':' + queue
+        self.sender = sender
         self.redis_storage = MessageStorageRedis(worker_id=self.uid, service_name=self.service_name)
 
         # обнуляем
@@ -119,16 +125,16 @@ class AmqpWorker(Process):
         :param body: тело сообщения
         :type body: basestring
         """
-        self.check_allowed_to_live()
-
         self.debug('get message:\n'
                    '  properties: %s\n'
                    '  method: %s\n'
                    '  body: %s', repr(properties), repr(method), repr(body))
 
+        self.check_allowed_to_live()
+
         # Получаем объект сообщения из сырого body
         message_constructor = MessageConstructor()
-        message_amqp = message_constructor.create_message_amqp(properties, body)
+        message_amqp = message_constructor.create_message_amqp(body, properties)
         message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
 
         # Проверяем в локальном хранилище, что это не дублирующая заявка
@@ -163,10 +169,39 @@ class AmqpWorker(Process):
             self.wait_dependence(message_amqp)
             self.debug('Execute callback')
             self.working_status = self.WORKING_YES
-            self.callback(message_to_service)
+
+            # Основная строчка кода, всего пакета:
+            callback_result = self.callback(message_to_service)
+
+            # Если результат выполнения, это словарь, то вызываем callback
+            if isinstance(callback_result, dict):
+                Callbacker.send(self.sender, Callbacker.EVENT_SUCCESS, message_amqp, callback_result)
+
+        except CallbackData as e:
+            try:
+                Callbacker.send(self.sender, e.callback_key, message_amqp, e.data)
+            except Exception as e:
+                self.error('Exception while send callback: %s\n  %s\n', str(e), traceback.format_exc())
+
         except Exception as e:
-            self.error('Exception: %s\n'
-                       '  %s', e.message, traceback.format_exc())
+            # При возникновение ошибки, используем стандартизированный формат сообщения:
+            callback_result = {
+                'error': {
+                    # Сообщение - Первый аргумент исключения, если это строка. Иначе, берется __str__
+                    'message': e.args[0] if len(e.args) and isinstance(e.args[0], basestring) else str(e),
+
+                    # Код - берется поле code, иначе 1
+                    'code': e.code if hasattr(e, 'code') else 1,
+                    'trace': e.trace if hasattr(e, 'trace') else traceback.format_exc()
+                }
+            }
+            try:
+                self.error('Exception from Handler: %s\n  %s\n',
+                           callback_result['error']['message'],
+                           callback_result['error']['trace'])
+                Callbacker.send(self.sender, Callbacker.EVENT_FAILURE, message_amqp, callback_result)
+            except Exception as e:
+                self.error('Exception while send callback: %s\n  %s\n', e.message, traceback.format_exc())
 
         self.redis_storage.message_set_done(message_amqp)
         self.release_dependence(message_amqp)

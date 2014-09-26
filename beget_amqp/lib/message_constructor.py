@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import json
-from .message.message_to_service import MessageToService
-from .message.message_amqp import MessageAmqp
+from .message.message_to_handler import MessageToHandler
+from .message.message_to_package import MessageToPackage
 
 
 class MessageConstructor:
@@ -14,55 +14,35 @@ class MessageConstructor:
         pass
 
     @staticmethod
-    def create_message_amqp(properties, body):
+    def create_message_amqp(body, properties):
         """
         Стандартное сообщение из AMQP
         """
-        dict_params = json.loads(body)
-        controller = dict_params.get('controller', None)
-        action = dict_params.get('action', None)
-        params = dict_params.get('params', None)
-        dependence = MessageConstructor._get_dependence(properties)
-        message_id = MessageConstructor._get_message_id(properties)
+        body_params = json.loads(body)
 
-        return MessageAmqp(controller, action, params, dependence=dependence, message_id=message_id)
+        # Обязательные данные
+        controller = body_params['controller']
+        action = body_params['action']
 
-    @staticmethod
-    def create_message_to_service(body):
-        """
-        Сообщение для обработчиков, контроллеров
-        """
-        dict_params = json.loads(body)
-        controller = dict_params.get('controller', None)
-        action = dict_params.get('action', None)
-        params = dict_params.get('params', None)
+        # Опциональные данные
+        params = body_params.get('params', {})
+        callback_list = body_params.get('callbackList')
 
-        return MessageToService(controller, action, params)
+        message_id = properties.message_id
+        """:type message_id: None|basestring"""
+
+        headers = properties.headers
+        """:type headers: None|dict"""
+
+        dependence = headers.get('dependence', []) if isinstance(headers, dict) else []
+
+        return MessageToPackage(controller,
+                                action,
+                                params,
+                                dependence=dependence,
+                                message_id=message_id,
+                                callback_list=callback_list)
 
     @staticmethod
     def create_message_to_service_by_message_amqp(message):
-        """
-        :type message: MessageAmqp
-        """
-        return MessageToService(message.controller,
-                                message.action,
-                                message.params,
-                                message.success_callback,
-                                message.failure_callback)
-
-    @staticmethod
-    def _get_dependence(properties):
-        """
-        Получаем зависимости из свойств сообщения
-        """
-        headers = properties.headers
-        if not isinstance(headers, dict):
-            return None
-        return headers.get('dependence')
-
-    @staticmethod
-    def _get_message_id(properties):
-        """
-        Получаем уникальный id сообщения
-        """
-        return properties.message_id
+        return MessageToHandler(message.controller, message.action, message.params)

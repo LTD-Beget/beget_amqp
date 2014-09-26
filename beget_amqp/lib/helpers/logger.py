@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import logging
+import logging  # todo наследовать это
 
 
 class Logger():
@@ -8,6 +8,12 @@ class Logger():
     Класс для логирования.
     Хранит состояние имени
     """
+
+    CRITICAL = logging.CRITICAL
+    ERROR = logging.ERROR
+    WARNING = logging.WARNING
+    INFO = logging.INFO
+    DEBUG = logging.DEBUG
 
     logger_name = 'beget.amqp'  # Имя лога которое будет использоваться по модулю
 
@@ -37,3 +43,8 @@ class Logger():
             Logger.set_logger_name(name)
 
         return logging.getLogger(Logger.get_logger_name())
+
+    @classmethod
+    def critical(cls, *args, **kwargs):
+        logger = Logger.get_logger()
+        logger.critical(*args, **kwargs)

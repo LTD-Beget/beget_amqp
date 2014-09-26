@@ -1,6 +1,0 @@
-AMQP_HOST = '192.168.2.1'
-AMQP_PORT = '5672'
-AMQP_USER = 'user'
-AMQP_PASS = 'password'
-AMQP_QUEUE = 'queue'
-AMQP_EXCHANGE = 'exchange'

@@ -7,7 +7,7 @@ Basic usage
     python setup.py install
 
     cd examples/
-    vi config_for_test.py
+    vi config.py
 
     python send_message.py      # Send test message
     python test_controller.py   # Get test message
@@ -52,3 +52,13 @@ AmqpManager = Amqp.Service(conf.AMQP_HOST,
                            handler=MyHandler)
 AmqpManager.start()
 ```
+
+Словарь:
+  Транспорт:
+      - Это объект через которые можно отправить сообщение.
+      - Это объект который может быть передан из одного пакета в другой. Чтобы это было возможно, использование объекта должно быть одинаковым и согласованным
+
+
+Согласование:
+  - На входе, код принимает как str, так и unicode. Сразу на входе, все unicode строки преобразуются к str и внутри пакета используется только str.
+  - Что передавать в Handler, callback? Должно определяться отправителем, а не пакетом. Если сообщение в экшен поступило в unicode, то в Handler оно должно быть переданно в unicode

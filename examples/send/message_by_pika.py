@@ -27,7 +27,7 @@ class Sender:
         connection.close()
 
 if __name__ == '__main__':
-    import config_for_test as conf
+    import config as conf
 
     msg = {'controller': 'test', 'action': 'kill_me', 'params': {'sleep_time': 30}}
 

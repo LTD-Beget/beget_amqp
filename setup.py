@@ -28,4 +28,6 @@ setup(name=package_folder,
       packages=[package_folder,
                 package_folder + '.lib',
                 package_folder + '.lib.dependence',
+                package_folder + '.lib.exception',
+                package_folder + '.lib.helpers',
                 package_folder + '.lib.message'])
