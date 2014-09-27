@@ -16,12 +16,12 @@ class MyHandler():
 
 if __name__ == "__main__":
 
-    import config_for_test as conf
+    import config as conf
 
     AmqpManager = beget_amqp.Service(conf.AMQP_HOST,
                                      conf.AMQP_USER,
                                      conf.AMQP_PASS,
-                                     conf.AMQP_EXCHANGE,
+                                     conf.AMQP_VHOST,
                                      conf.AMQP_QUEUE,
                                      handler=MyHandler)
     AmqpManager.start()

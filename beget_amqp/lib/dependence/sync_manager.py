@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import time
-import sys
-import datetime
 import os
 
-import multiprocessing
 from multiprocessing.managers import BaseManager
 from multiprocessing import Lock
 
-from ..logger import Logger
+from ..helpers.logger import Logger
 
 
 #
@@ -139,7 +136,7 @@ class SyncManager(object):
         CreatorSharedManager.register('SyncManager', SyncManager)
         creator_shared_manager = CreatorSharedManager()
         creator_shared_manager.start()
-        return creator_shared_manager.SyncManager()
+        return creator_shared_manager.SyncManager()  # ignore this warning of your IDE
 
     def get_workers_id(self):
         return self.workers_id_list
@@ -156,14 +153,14 @@ class SyncManager(object):
         return self.unacknowledged_message_id_list
 
     def add_unacknowledged_message_id(self, id):
-        self.logger.debug('SyncManager: add unacknowledged message:', id)
+        self.logger.debug('SyncManager: add unacknowledged message: %s', id)
         if id in self.unacknowledged_message_id_list:
             return False
         self.unacknowledged_message_id_list.append(id)
         return True
 
     def remove_unacknowledged_message_id(self, id):
-        self.logger.debug('SyncManager: remove unacknowledged message:', id)
+        self.logger.debug('SyncManager: remove unacknowledged message: %s', id)
         if id not in self.unacknowledged_message_id_list:
             return False
         self.unacknowledged_message_id_list.remove(id)

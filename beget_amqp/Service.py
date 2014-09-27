@@ -7,10 +7,10 @@ import os
 import traceback
 import uuid
 
-
-from .lib.logger import Logger
+from .lib.helpers.logger import Logger
 from .lib.worker import AmqpWorker
 from .lib.dependence.sync_manager import SyncManager
+from .Sender import Sender
 
 
 class Service():
@@ -66,7 +66,6 @@ class Service():
         :param service_name: Имя сервиса. Используется для ключа к локальному хранилищу
         :type service_name: basestring
         """
-
         #Получаем логгер в начале, иначе другие классы могут получить другое имя для логера
         self.logger = Logger.get_logger(logger_name)
 
@@ -107,6 +106,7 @@ class Service():
         self._last_worker_id = 0
 
         self.sync_manager = SyncManager.get_manager()
+        self.sender = Sender(user, password, host, port, virtual_host)
 
         # Ctrl+C приводит к немедленной остановке
         signal.signal(signal.SIGINT, self.sig_handler)
@@ -147,7 +147,8 @@ class Service():
                                     self.port,
                                     no_ack=self.no_ack,
                                     prefetch_count=self.prefetch_count,
-                                    uid=uid)
+                                    uid=uid,
+                                    sender=self.sender)
                 worker.start()
                 self._worker_container.append(worker)
                 self.sync_manager.add_worker_id(worker.uid)
@@ -284,3 +285,13 @@ class Service():
                 self.logger.debug('Service: when send signal to worker: Exception: %s\n'
                                   '  %s', e.message, traceback.format_exc())
         return False
+
+    def add_transport(self, transport, transport_name):
+        """
+        Добавление транспорта, который может использовать Sender.
+
+        :param transport: Объект транспорта, который содержит метод send
+        :param transport_name: Имя-ключ транспорта, по которому мы получаем его
+        :type transport_name: basestring
+        """
+        self.sender.add_transport(transport, transport_name)

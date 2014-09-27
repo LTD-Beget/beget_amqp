@@ -3,7 +3,11 @@
 import sys
 import re
 import traceback
-from .lib.logger import Logger
+
+from .lib.helpers.logger import Logger
+from .lib.exception.ExceptionAction import ExceptionAction
+from .lib.exception.ExceptionHandler import ExceptionHandler
+from .lib.exception.CallbackData import CallbackData
 
 
 class Handler(object):
@@ -28,12 +32,18 @@ class Handler(object):
         :type message: MessageAmqp
         """
         try:
-            result = self.run_controller(message)
-            # message.success_callback(result)
+            return self.run_controller(message)
+
+        # Игнорируем и прокидываем дальше, чтобы вызывать callback, если есть
+        except (CallbackData, ExceptionAction, ExceptionHandler) as e:
+            raise e
         except Exception as e:
-            self.logger.error('Handler->on_message: Exception: %s\n'
-                              '  %s', e.message, traceback.format_exc())
-            # message.failure_callback()
+            self.logger.error('Handler->on_message: Exception: %s\n  %s', e.message, traceback.format_exc())
+            raise ExceptionHandler(
+                e.args[0] if len(e.args) and isinstance(e.args[0], basestring) else str(e),
+                e.args[1] if len(e.args) > 1 and isinstance(e.args[1], int) else 1,
+                e.trace if hasattr(e, 'trace') else traceback.format_exc()
+            )
 
     def run_controller(self, message):
         """

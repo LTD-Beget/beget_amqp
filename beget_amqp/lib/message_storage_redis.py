@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import redis
-from .logger import Logger
+from .helpers.logger import Logger
 
 
 class MessageStorageRedis(object):
