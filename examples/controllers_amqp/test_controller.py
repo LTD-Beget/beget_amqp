@@ -80,10 +80,3 @@ class TestController(amqp.Controller):
         print 'status: ', repr(status)
         print 'answer: ', repr(answer)
         print 'accounts: ', repr(accounts)
-
-    #########################
-    # Проверка, что порождаемые процессы корректно умирают:
-
-    def action_create_child(self):
-        import subprocess
-        subprocess.Popen(['sleep', '10'])
