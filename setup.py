@@ -23,7 +23,7 @@ setup(name=package_folder,
                         'redis',
                         'setproctitle==1.1.8'],
       dependency_links=[
-          'git+ssh://git@github.com/LTD-Beget/setproctitle.git#egg=private_package_name-1.1#egg=setproctitle-1.1.8'
+          'http://github.com/LTD-Beget/setproctitle/tarball/master#egg=setproctitle-1.1.8'
       ],
       packages=[package_folder,
                 package_folder + '.lib',

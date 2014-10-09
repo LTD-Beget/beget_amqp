@@ -16,5 +16,4 @@ sender = Sender(
     vhost=conf.AMQP_VHOST
 )
 
-sender.send(conf.AMQP_QUEUE + '/test/print_any_argument', {'some_arg': 42})
-sender.send(conf.AMQP_QUEUE + '/test/print_any_argument', {'some_arg': 'some'})
+sender.send(conf.AMQP_QUEUE + '/test/create_child')
