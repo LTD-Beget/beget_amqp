@@ -89,6 +89,9 @@ class AmqpWorker(Process):
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGHUP, self.sig_handler)
 
+        # Сигнал, чтобы пораждаемые процессы не переходили в статус zombie.
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
         # Начинаем слушать AMQP и выполнять задачи полученные из сообщений:
         try:
             self.amqp_listener = AmqpListen(self.host,
