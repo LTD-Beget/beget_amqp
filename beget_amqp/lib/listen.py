@@ -11,6 +11,9 @@ class AmqpListen:
     Класс подключения к AMQP, прослушки очереди и передачи сообщений в указанную функцию
     """
 
+    WORK_RUNNING = 1
+    WORK_STOPPING = 2
+
     def __init__(self,
                  host,
                  user,
@@ -18,6 +21,8 @@ class AmqpListen:
                  virtual_host,
                  queue,
                  callback,
+                 sync_manager,
+                 worker_uid,
                  port=5672,
                  durable=True,
                  auto_delete=True,
@@ -38,6 +43,11 @@ class AmqpListen:
         self.auto_delete = auto_delete
         self.no_ack = no_ack
         self.prefetch_count = prefetch_count
+
+        self.sync_manager = sync_manager
+        self.worker_uid = worker_uid
+
+        self.work_status = self.WORK_RUNNING
 
         # Обнуляем
         self.connection = None
@@ -73,13 +83,21 @@ class AmqpListen:
             """:type : BlockingChannel"""
             self.channel.queue_declare(queue=self.queue, durable=self.durable, auto_delete=self.auto_delete)
 
-        self.channel.basic_qos(prefetch_count=self.prefetch_count)
-        self.channel.basic_consume(self.callback, queue=self.queue, no_ack=self.no_ack)
-        self.channel.start_consuming()
+        self.channel.basic_qos(prefetch_count=1)
+
+        while self.work_status == self.WORK_RUNNING:
+            self.connection.sleep(0.1)
+            if not self.sync_manager.is_allow_consume(self.worker_uid):
+                continue
+
+            for method_frame, properties, body in self.channel.consume(queue=self.queue, no_ack=self.no_ack):
+                self.channel.cancel()
+                self.callback(self.channel, method_frame, properties, body)
+                break
 
     def stop(self):
         """
         Завершить прослушивание
         """
         self.logger.debug('AmqpListen: stop listen')
-        self.channel.stop_consuming()
+        self.work_status = self.WORK_STOPPING

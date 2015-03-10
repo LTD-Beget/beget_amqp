@@ -173,6 +173,7 @@ class Service():
                 continue
             self.sync_manager.release_all_dependence_by_worker_id(worker.uid)
             self.sync_manager.remove_worker_id(worker.uid)
+            self.sync_manager.clear_consume()
             if worker.uid in self._worker_id_list_in_killed_process:
                 self._worker_id_list_in_killed_process.remove(worker.uid)
             self._worker_container.remove(worker)

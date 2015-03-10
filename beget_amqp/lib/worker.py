@@ -97,6 +97,8 @@ class AmqpWorker(Process):
                                             self.virtual_host,
                                             self.queue,
                                             self._on_message,
+                                            self.sync_manager,
+                                            self.uid,
                                             self.port,
                                             self.durable,
                                             self.auto_delete,
@@ -140,6 +142,7 @@ class AmqpWorker(Process):
         # Проверяем в локальном хранилище, что это не дублирующая заявка
         if self.redis_storage.is_duplicate_message(message_amqp):
             if self.redis_storage.is_done_message(message_amqp):
+                self.sync_manager.clear_consume()
                 self.sync_manager.remove_unacknowledged_message_id(message_amqp.id)
                 if not self.no_ack:
                     self.debug('Acknowledge delivery_tag: %s', method.delivery_tag)
@@ -151,6 +154,7 @@ class AmqpWorker(Process):
                 if worker_id in worker_id_alive_list:
                     # Todo: Rabbit don't allow get custom or another message.
                     # Todo: Exclude the receipt of this message for this channel
+                    self.sync_manager.clear_consume()
                     self.sync_manager.add_unacknowledged_message_id(message_amqp.id)
                     time.sleep(30)
                     if not self.no_ack:
@@ -163,6 +167,8 @@ class AmqpWorker(Process):
 
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
+
+        self.sync_manager.clear_consume()
 
         try:
             self.debug('Wait until the dependence be free')
