@@ -36,6 +36,9 @@ class SyncManager(object):
         self.dict_of_queue = {}
         self.lock = Lock()
 
+        self.consumer_lock = Lock()
+        self.consumer_worker_uid = None
+
     def set_and_wait(self, message, worker_id=''):
         """
         :type message: MessageAmqp
@@ -165,3 +168,26 @@ class SyncManager(object):
             return False
         self.unacknowledged_message_id_list.remove(id)
         return True
+
+    def is_allow_consume(self, worker_id):
+        self.consumer_lock.acquire()
+
+        if self.consumer_worker_uid == worker_id:
+            self.logger.debug('Allow consume: ' + worker_id + ' worker_id')
+            self.consumer_lock.release()
+            return True
+
+        if self.consumer_worker_uid is None:
+            self.logger.debug('Allow consume: ' + worker_id + ' None')
+            self.consumer_worker_uid = worker_id
+            self.consumer_lock.release()
+            return True
+
+        self.consumer_lock.release()
+        return False
+
+    def clear_consume(self):
+        self.logger.debug('clear consume: ' + repr(self.consumer_worker_uid))
+        self.consumer_lock.acquire()
+        self.consumer_worker_uid = None
+        self.consumer_lock.release()
