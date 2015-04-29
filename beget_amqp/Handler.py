@@ -45,6 +45,13 @@ class Handler(object):
                 e.trace if hasattr(e, 'trace') else traceback.format_exc()
             )
 
+    def on_message_expired(self, message):
+        """
+        Обработка истекшего ttl для сообщения
+        Метод для переопределения.
+        """
+        self.logger.info('Message expired')
+
     def run_controller(self, message):
         """
         вызываем контроллер с переданными в сообщение параметрами.

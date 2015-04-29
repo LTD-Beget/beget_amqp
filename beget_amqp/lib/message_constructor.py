@@ -34,14 +34,19 @@ class MessageConstructor:
         headers = properties.headers
         """:type headers: None|dict"""
 
-        dependence = headers.get('dependence', []) if isinstance(headers, dict) else []
+        if not isinstance(headers, dict):
+            headers = []
+
+        dependence = headers.get('dependence', [])
+        expiration = headers.get('expiration', 0)
 
         return MessageToPackage(controller,
                                 action,
                                 params,
                                 dependence=dependence,
                                 message_id=message_id,
-                                callback_list=callback_list)
+                                callback_list=callback_list,
+                                expiration=expiration)
 
     @staticmethod
     def create_message_to_service_by_message_amqp(message):
