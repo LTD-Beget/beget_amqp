@@ -35,7 +35,7 @@ class MessageConstructor:
         """:type headers: None|dict"""
 
         if not isinstance(headers, dict):
-            headers = []
+            headers = {}
 
         dependence = headers.get('dependence', [])
         expiration = headers.get('expiration', 0)
