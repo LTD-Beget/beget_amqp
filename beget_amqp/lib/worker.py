@@ -37,7 +37,7 @@ class AmqpWorker(Process):
                  password,
                  virtual_host,
                  queue,
-                 callback,
+                 handler,
                  sync_manager,
                  port=5672,
                  durable=True,
@@ -55,7 +55,7 @@ class AmqpWorker(Process):
         self.password = password
         self.virtual_host = virtual_host
         self.queue = queue
-        self.callback = callback
+        self.handler = handler
         self.sync_manager = sync_manager
         """:type : beget_amqp.lib.dependence.sync_manager.SyncManager"""
         self.port = port
@@ -176,8 +176,11 @@ class AmqpWorker(Process):
             self.debug('Execute callback')
             self.working_status = self.WORKING_YES
 
-            # Основная строчка кода, всего пакета:
-            callback_result = self.callback(message_to_service)
+            if not self.is_ttl_expired(message_amqp):
+                # Основная строчка кода, всего пакета:
+                callback_result = self.handler.on_message(message_to_service)
+            else:
+                callback_result = self.handler.on_message_expired(message_to_service)
 
             # Если результат выполнения, это словарь, то вызываем callback
             if isinstance(callback_result, dict):
@@ -330,6 +333,21 @@ class AmqpWorker(Process):
         else:
             self.debug('stop when the work will be done')
             self.program_status = self.STATUS_STOP
+
+    def is_ttl_expired(self, message_amqp):
+        """
+        Превысило ли сообщение время ожидания
+        :type message_amqp: MessageAmqp
+        :rtype : bool
+        """
+        if message_amqp.expiration == 0:
+            return False
+
+        if message_amqp.expiration < time.time():
+            self.info('Message expired: %s', message_amqp.id)
+            return True
+
+        return False
 
     ################################################################################
     # Логирование

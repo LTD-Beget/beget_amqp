@@ -84,8 +84,6 @@ class Service():
         if hasattr(self.handler, 'set_prefix'):
             self.handler.set_prefix(controllers_prefix)
 
-        # on_message хендлера является получателем сообщения
-        self.controller_callback = self.handler.on_message
         self.host = host
         self.user = user
         self.password = password
@@ -142,7 +140,7 @@ class Service():
                                     self.password,
                                     self.virtual_host,
                                     self.queue,
-                                    self.controller_callback,
+                                    self.handler,
                                     self.sync_manager,
                                     self.port,
                                     no_ack=self.no_ack,
