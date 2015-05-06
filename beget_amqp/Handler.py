@@ -64,9 +64,18 @@ class Handler(object):
                           '  action: %s\n'
                           '  params: %s', message.action, message.params)
         target_controller = controller_class(message.action)
+
         method = getattr(target_controller, "run_action")
 
-        return method(message.params)
+        try:
+            return method(message.params)
+        finally:
+            try:
+                method_after = getattr(target_controller, "run_after_action", None)
+                if method_after:
+                    method_after()
+            except Exception:
+                pass
 
     def _get_class(self, controller_name):
         """

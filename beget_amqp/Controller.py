@@ -43,3 +43,11 @@ class Controller(object):
                 e.args[1] if len(e.args) > 1 and isinstance(e.args[1], int) else 1,
                 e.trace if hasattr(e, 'trace') else traceback.format_exc()
             )
+
+    def run_after_action(self):
+        """
+        Для переопределения
+         - запускается не зависимо от возникновение ошибки в run_action
+         - return  и возникновение ошибок игнорируется
+        """
+        pass
