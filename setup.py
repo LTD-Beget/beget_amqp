@@ -30,5 +30,6 @@ setup(name=package_folder,
                 package_folder + '.lib.dependence',
                 package_folder + '.lib.exception',
                 package_folder + '.lib.helpers',
+                package_folder + '.lib.communicate',
                 package_folder + '.lib.message',
                 package_folder + '.lib.message.storage'])
