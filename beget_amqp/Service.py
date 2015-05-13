@@ -11,6 +11,7 @@ from .lib.helpers.logger import Logger
 from .lib.worker import AmqpWorker
 from .lib.dependence.sync_manager import SyncManager
 from .Sender import Sender
+from .lib.communicate.comunicate_redis import CommunicateRedis
 
 
 class Service():
@@ -36,8 +37,7 @@ class Service():
                  handler=None,
                  controllers_prefix=None,
                  logger_name=None,
-                 no_ack=False,
-                 service_name=None):
+                 no_ack=False):
         """
         :param host:  может принимать как адрес, так и hostname, так и '' для прослушки всех интерфейсов.
         :param user:
@@ -62,25 +62,22 @@ class Service():
         :param logger_name:  Имя для логирования
         :param no_ack:  Игнорировать необходимость подтверждения сообщений.
                         (Все сообщения сразу будут выданы работникам, даже если они заняты)
-
-        :param service_name: Имя сервиса. Используется для ключа к локальному хранилищу
-        :type service_name: basestring
         """
-        #Получаем логгер в начале, иначе другие классы могут получить другое имя для логера
+        # Получаем логгер в начале, иначе другие классы могут получить другое имя для логера
         self.logger = Logger.get_logger(logger_name)
 
-        #Если передали кастомный хэндлер, то используем его
+        # Если передали кастомный хэндлер, то используем его
         if controllers_prefix is None and handler is None:
             raise Exception('Need set controllers_prefix or handler')
         if handler:
-            if not 'on_message' in dir(handler):
+            if 'on_message' not in dir(handler):
                 raise Exception('Handler must have a method - .on_message')
             self.handler = handler()
         else:
             from .Handler import Handler as AmqpHandler
             self.handler = AmqpHandler()
 
-        #Сообщаем хендлеру префикс контроллеров
+        # Сообщаем хендлеру префикс контроллеров
         if hasattr(self.handler, 'set_prefix'):
             self.handler.set_prefix(controllers_prefix)
 
@@ -95,7 +92,6 @@ class Service():
         self.durable = durable
         self.auto_delete = auto_delete
         self.no_ack = no_ack
-        self.service_name = service_name
 
         self._status = self.STATUS_STOP
         self._worker_container = []
@@ -103,6 +99,7 @@ class Service():
         """:type : list[AmqpWorker]"""
         self._last_worker_id = 0
 
+        self.communicator = CommunicateRedis(self.queue)
         self.sync_manager = SyncManager.get_manager()
         self.sender = Sender(user, password, host, port, virtual_host)
 
@@ -117,9 +114,9 @@ class Service():
         """
         Запускаем сервис
         """
-        self.logger.debug('Service: pid: %s', os.getpid())
-        self.logger.info('Start service on host: %s,  port: %s,  VH: %s,  queue: %s',
-                         self.host, self.port, self.virtual_host, self.queue)
+        self.debug('pid: %s', os.getpid())
+        self.info('Start service on host: %s,  port: %s,  VH: %s,  queue: %s',
+                  self.host, self.port, self.virtual_host, self.queue)
         self._status = self.STATUS_START
 
         # Основной бесконечный цикл. Выход через сигналы или Exception
@@ -130,8 +127,8 @@ class Service():
 
             # Если воркеров меньше чем положено, создаем новых.
             while worker_required_number > self.get_workers_alive_count():
-                self.logger.debug('Service: Create worker-%s of %s',
-                                  (len(self._worker_container) + 1), self.number_workers)
+                self.debug('Create worker-%s of %s',
+                           (len(self._worker_container) + 1), self.number_workers)
 
                 uid = self.generate_uid()
 
@@ -152,12 +149,15 @@ class Service():
                 self.sync_manager.add_worker_id(worker.uid)
 
             if worker_required_number < self.get_workers_alive_count():
-                self.logger.debug('Service: current count workers: %s but maximum: %s',
-                                  len(self._worker_container), self.number_workers)
+                self.debug('current count workers: %s but maximum: %s',
+                           len(self._worker_container), self.number_workers)
                 self.stop_one_worker()
 
             # Если воркер умер, убераем его из расчета.
             self._delete_dead_workers()
+
+            # обработка запросов в API для пакета
+            self.communicate()
 
             # Снижение скорости проверки воркеров
             time.sleep(1)
@@ -182,7 +182,7 @@ class Service():
         """
         Обрабатываем сигналы
         """
-        self.logger.debug("Service: get signal %s", sig_num)
+        self.debug('get signal %s', sig_num)
         if sig_num is signal.SIGHUP or sig_num is signal.SIGTERM:
             self.clean_signals()
             self.stop_smoothly()
@@ -195,7 +195,7 @@ class Service():
         """
         Отключаем обработку сигналов
         """
-        self.logger.debug('Service: stop receiving signals')
+        self.debug('stop receiving signals')
         signal.signal(signal.SIGINT, self.debug_signal)
         signal.signal(signal.SIGTERM, self.debug_signal)
         signal.signal(signal.SIGHUP, self.debug_signal)
@@ -204,20 +204,20 @@ class Service():
         """
         Метод-заглушка для сигналов
         """
-        self.logger.debug('Service: get signal %s but not handle this.', sig_num)
+        self.debug('get signal %s but not handle this.', sig_num)
 
     def stop(self):
         """
         Останавливаем сервисы
         """
-        self.logger.info('Service: stop Service')
+        self.info('stop Service')
         self.stop_smoothly()
 
     def stop_immediately(self):
         """
         Жесткая остановка
         """
-        self.logger.critical("Service: stop immediately")
+        self.critical('stop immediately')
 
         try:
             # Убиваем воркеров
@@ -226,8 +226,7 @@ class Service():
                     continue
                 worker.terminate()
         except Exception as e:
-            self.logger.debug('Service: when terminate worker: Exception: %s\n'
-                              '  %s', e.message, traceback.format_exc())
+            self.debug('when terminate worker: Exception: %s\n  %s', e.message, traceback.format_exc())
         # Выходим
         sys.exit(1)
 
@@ -235,7 +234,7 @@ class Service():
         """
         Плавная остановка с разрешением воркерам доделать свою работу
         """
-        self.logger.critical("Service: smoothly stops workers and exit")
+        self.critical('smoothly stops workers and exit')
 
         # Посылаем всем воркерам сигнал плавного завершения
         for worker in self._worker_container:
@@ -244,19 +243,17 @@ class Service():
                     continue
                 os.kill(worker.pid, signal.SIGHUP)
             except Exception as e:
-                self.logger.debug('Service: when send signal to worker: Exception: %s\n'
-                                  '  %s', e.message, traceback.format_exc())
+                self.debug('when send signal to worker: Exception: %s\n  %s', e.message, traceback.format_exc())
 
         # Ждем пока все воркеры остановятся
         for worker in self._worker_container:
             try:
                 if not worker.is_alive():
                     continue
-                self.logger.debug('Service: wait when %s is die' % repr(worker))
+                self.debug('wait when %s is die' % repr(worker))
                 worker.join()
             except Exception as e:
-                self.logger.debug('Service: when wait worker: Exception: %s\n'
-                                  '  %s', e.message, traceback.format_exc())
+                self.debug('when wait worker: Exception: %s\n  %s', e.message, traceback.format_exc())
 
         # Выходим
         self._status = self.STATUS_STOP
@@ -281,8 +278,7 @@ class Service():
                 return True
 
             except Exception as e:
-                self.logger.debug('Service: when send signal to worker: Exception: %s\n'
-                                  '  %s', e.message, traceback.format_exc())
+                self.debug('when send signal to worker: Exception: %s\n  %s', e.message, traceback.format_exc())
         return False
 
     def add_transport(self, transport, transport_name):
@@ -294,3 +290,48 @@ class Service():
         :type transport_name: basestring
         """
         self.sender.add_transport(transport, transport_name)
+
+    def communicate(self):
+        question_list = self.communicator.get_question_list()
+        if not isinstance(question_list, dict):
+            return None
+
+        for question_key, question in question_list.iteritems():
+            self.debug('get question: %s', question)
+            answer = self.answer_for_question(question)
+            self.communicator.set_answer(question_key, answer)
+
+    def answer_for_question(self, question):
+        method_name = 'action_' + question
+        method = getattr(self, method_name, None)
+        if not method:
+            return 'Not find method: ' + method_name
+
+        try:
+            return method()
+        except Exception as e:
+            self.debug('when answered to question: Exception: %s\n  %s', e.message, traceback.format_exc())
+            return 'Error in method'
+
+    def action_ping(self):
+        return 'pong'
+
+    def action_get_current_status(self):
+        """
+        Возвращаем информацию о текущей деятельности:
+          - id сообщений которые находятся в работе
+          - количество воркеров
+        """
+        return {
+            'worker_number': self.get_workers_alive_count(),
+            'message_list': self.sync_manager.get_message_on_work()
+        }
+
+    def debug(self, msg, *args):
+        self.logger.debug('Service: ' + msg, *args)
+
+    def info(self, msg, *args):
+        self.logger.info('Service: ' + msg, *args)
+
+    def critical(self, msg, *args):
+        self.logger.critical('Service: ' + msg, *args)

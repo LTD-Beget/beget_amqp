@@ -4,7 +4,7 @@ from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
 from .helpers.logger import Logger
-from .message_storage_redis import MessageStorageRedis
+from .message.storage.message_storage_redis import MessageStorageRedis
 from ..Callbacker import Callbacker
 
 from .exception.CallbackData import CallbackData
@@ -45,7 +45,6 @@ class AmqpWorker(Process):
                  no_ack=False,
                  prefetch_count=1,
                  uid='',
-                 service_name=None,
                  sender=None):
         Process.__init__(self)
 
@@ -64,9 +63,8 @@ class AmqpWorker(Process):
         self.no_ack = no_ack
         self.prefetch_count = prefetch_count
         self.uid = uid
-        self.service_name = service_name or virtual_host + ':' + queue
         self.sender = sender
-        self.redis_storage = MessageStorageRedis(worker_id=self.uid, service_name=self.service_name)
+        self.redis_storage = MessageStorageRedis(worker_id=self.uid, queue=queue)
 
         # обнуляем
         self.amqp_listener = None
@@ -163,7 +161,8 @@ class AmqpWorker(Process):
                     return
 
         # Сохраняем информацию о заявке в локальное хранилище
-        self.redis_storage.message_save(message_amqp)
+        self.redis_storage.message_save(message_amqp, body, properties)
+        self.sync_manager.set_message_on_work(message_amqp)
 
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
@@ -175,6 +174,7 @@ class AmqpWorker(Process):
             self.wait_dependence(message_amqp)
             self.debug('Execute callback')
             self.working_status = self.WORKING_YES
+            self.redis_storage.message_save_start_time(message_amqp)
 
             if not self.is_ttl_expired(message_amqp):
                 # Основная строчка кода, всего пакета:
@@ -212,6 +212,7 @@ class AmqpWorker(Process):
             except Exception as e:
                 self.error('Exception while send callback: %s\n  %s\n', e.message, traceback.format_exc())
 
+        self.sync_manager.set_message_on_work_done(message_amqp)
         self.redis_storage.message_set_done(message_amqp)
         self.release_dependence(message_amqp)
         if not self.no_ack:

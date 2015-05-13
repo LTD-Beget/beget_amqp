@@ -36,6 +36,8 @@ class SyncManager(object):
         self.dict_of_queue = {}
         self.lock = Lock()
 
+        self.message_on_work = []
+
         self.consumer_lock = Lock()
         self.consumer_worker_uid = None
 
@@ -191,3 +193,12 @@ class SyncManager(object):
         self.consumer_lock.acquire()
         self.consumer_worker_uid = None
         self.consumer_lock.release()
+
+    def get_message_on_work(self):
+        return self.message_on_work
+
+    def set_message_on_work(self, message_amqp):
+        self.message_on_work.append(message_amqp.id)
+
+    def set_message_on_work_done(self, message_amqp):
+        self.message_on_work.remove(message_amqp.id)
