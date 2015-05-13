@@ -17,7 +17,7 @@ class StorageRedis(object):
 
     MESSAGE_PREFIX = 'msg_store'
 
-    LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 7  # Время хранения информации в локальном хранилище
+    LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 3  # Время хранения информации в локальном хранилище
 
     def __init__(self, socket="/var/run/redis/redis.sock"):
         self.redis = redis.StrictRedis(unix_socket_path=socket)
