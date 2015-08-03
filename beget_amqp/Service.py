@@ -327,6 +327,15 @@ class Service():
             'message_list': self.sync_manager.get_message_on_work()
         }
 
+    def action_shutdown(self):
+        """
+        Плавная остановка сервера.
+        """
+        self.logger.info('Shutting down by request from api')
+        self.clean_signals()
+        self.stop_smoothly()
+        return 'Ok'
+
     def debug(self, msg, *args):
         self.logger.debug('Service: ' + msg, *args)
 
