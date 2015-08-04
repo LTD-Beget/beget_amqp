@@ -3,7 +3,7 @@
 from multiprocessing import Process
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
-from .helpers.logger import Logger
+from .helpers.logger import Logger, uid_logger_wrapper_method
 from .message.storage.message_storage_redis import MessageStorageRedis
 from ..Callbacker import Callbacker
 
@@ -109,6 +109,7 @@ class AmqpWorker(Process):
 
         self.debug('Correct exit from multiprocessing')
 
+    @uid_logger_wrapper_method
     def _on_message(self, channel, method, properties, body):
         """
         Обрабатываем сообщение полученное из AMQP
