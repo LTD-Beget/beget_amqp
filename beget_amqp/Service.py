@@ -12,6 +12,7 @@ from .lib.worker import AmqpWorker
 from .lib.dependence.sync_manager import SyncManager
 from .Sender import Sender
 from .lib.communicate.comunicate_redis import CommunicateRedis
+from ._version import __version__ as version
 
 
 class Service():
@@ -115,8 +116,8 @@ class Service():
         Запускаем сервис
         """
         self.debug('pid: %s', os.getpid())
-        self.info('Start service on host: %s,  port: %s,  VH: %s,  queue: %s',
-                  self.host, self.port, self.virtual_host, self.queue)
+        self.info('Start service on host: %s,  port: %s,  VH: %s,  queue: %s version: %s',
+                  self.host, self.port, self.virtual_host, self.queue, version)
         self._status = self.STATUS_START
 
         # Основной бесконечный цикл. Выход через сигналы или Exception
@@ -326,6 +327,15 @@ class Service():
             'worker_number': self.get_workers_alive_count(),
             'message_list': self.sync_manager.get_message_on_work()
         }
+
+    def action_shutdown(self):
+        """
+        Плавная остановка сервера.
+        """
+        self.logger.info('Shutting down by request from api')
+        self.clean_signals()
+        self.stop_smoothly()
+        return 'Ok'
 
     def debug(self, msg, *args):
         self.logger.debug('Service: ' + msg, *args)

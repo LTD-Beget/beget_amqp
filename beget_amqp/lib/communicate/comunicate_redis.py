@@ -7,6 +7,18 @@ from .comunicate import Communicate
 class CommunicateRedis(Communicate):
     """
     Для получения запросов и ответа на них
+
+    Пример взаимодействия через redis консоль:
+    redis /var/run/redis/redis.sock> HGETALL amqp_services  # список зарегистрированных amqp серверов
+    1) "phportal_konovalov_046d362c"   # <- ключ (queue + uid)
+    2) "phportal_konovalov"            # <- значение (queue)
+
+    redis /var/run/redis/redis.sock> HSET phportal_konovalov_046d362c q_1234_uniq_id 'ping'  # отправка запроса
+    (integer) 1
+
+    redis /var/run/redis/redis.sock> HGETALL a_1234_uniq_id  # Получение ответа
+    1) "phportal_konovalov_046d362c"  # <- ответивший сервер (можно отправить запрос с одним uid, многим серверам)
+    2) "pong"                         # <- ответ
     """
 
     def __init__(self, queue, socket="/var/run/redis/redis.sock"):
