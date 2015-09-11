@@ -50,6 +50,7 @@ class Callbacker:
 
         transport_name = callback_property.get('transport')
         path = callback_property.get('path')
+        data_callback = callback_property.get('data', {})
 
         if not (transport_name and path):
             logger.debug('Callbacker: not found required param in callback: %s', repr(callback_property))
@@ -68,4 +69,11 @@ class Callbacker:
         logger.debug('Callbacker: send by:\n  transport:%s\n  path:%s\n  params:%s', transport_name, path, repr(params))
 
         params = Argument.check_type(params, dict, {}, strict_type=(type(None), dict))
+
+        # Если в callback передавали данные то отправляется {key_from_callback_data: data, result: {dict_from_result}}
+        if data_callback:
+            if event != Callbacker.EVENT_FAILURE:
+                params['result'] = params.copy()
+            params.update(data_callback)
+
         transport.send(path, params)
