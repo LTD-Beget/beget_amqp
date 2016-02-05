@@ -183,9 +183,7 @@ class AmqpWorker(Process):
             else:
                 callback_result = self.handler.on_message_expired(message_to_service)
 
-            # Если результат выполнения, это словарь, то вызываем callback
-            if isinstance(callback_result, dict):
-                Callbacker.send(self.sender, Callbacker.EVENT_SUCCESS, message_amqp, callback_result)
+            Callbacker.send(self.sender, Callbacker.EVENT_SUCCESS, message_amqp, callback_result)
 
         except CallbackData as e:
             try:
