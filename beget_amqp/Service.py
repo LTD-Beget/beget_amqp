@@ -38,7 +38,8 @@ class Service():
                  handler=None,
                  controllers_prefix=None,
                  logger_name=None,
-                 no_ack=False):
+                 no_ack=False,
+                 max_la=0):
         """
         :param host:  может принимать как адрес, так и hostname, так и '' для прослушки всех интерфейсов.
         :param user:
@@ -63,6 +64,8 @@ class Service():
         :param logger_name:  Имя для логирования
         :param no_ack:  Игнорировать необходимость подтверждения сообщений.
                         (Все сообщения сразу будут выданы работникам, даже если они заняты)
+
+        :param max_la: При каком load average на сервере приостанавливать выполнение заданий, < 0 - выключено
         """
         # Получаем логгер в начале, иначе другие классы могут получить другое имя для логера
         self.logger = Logger.get_logger(logger_name)
@@ -104,6 +107,8 @@ class Service():
         self.sync_manager = SyncManager.get_manager()
         self.sender = Sender(user, password, host, port, virtual_host)
 
+        self.max_la = max_la
+
         # Ctrl+C приводит к немедленной остановке
         signal.signal(signal.SIGINT, self.sig_handler)
 
@@ -144,7 +149,8 @@ class Service():
                                     no_ack=self.no_ack,
                                     prefetch_count=self.prefetch_count,
                                     uid=uid,
-                                    sender=self.sender)
+                                    sender=self.sender,
+                                    max_la=self.max_la)
                 worker.start()
                 self._worker_container.append(worker)
                 self.sync_manager.add_worker_id(worker.uid)

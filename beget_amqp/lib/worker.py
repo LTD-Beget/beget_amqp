@@ -45,7 +45,8 @@ class AmqpWorker(Process):
                  no_ack=False,
                  prefetch_count=1,
                  uid='',
-                 sender=None):
+                 sender=None,
+                 max_la=0):
         Process.__init__(self)
 
         self.logger = Logger.get_logger()
@@ -64,6 +65,7 @@ class AmqpWorker(Process):
         self.prefetch_count = prefetch_count
         self.uid = uid
         self.sender = sender
+        self.max_la = max_la
         self.redis_storage = MessageStorageRedis(worker_id=self.uid, queue=queue)
 
         # обнуляем
@@ -175,6 +177,9 @@ class AmqpWorker(Process):
             self.wait_dependence(message_amqp)
             self.debug('Execute callback')
             self.working_status = self.WORKING_YES
+            # Ждем, пока Load Average на сервере будет меньше чем задан в настройках
+            if self.max_la > 0:
+                self.check_load_average()
             self.redis_storage.message_save_start_time(message_amqp)
 
             if not self.is_ttl_expired(message_amqp):
@@ -221,6 +226,20 @@ class AmqpWorker(Process):
 
         # Если за время работы над сообщением мы получили команду выхода, то выходим
         self.check_allowed_to_live()
+
+    def check_load_average(self):
+        """
+        Зависает в цикле если load average больше допустимого, выходит как нагрузка стабилизируется
+        :return:
+        """
+        while True:
+            la = os.getloadavg()[0]
+            if la > self.max_la:
+                self.debug("Load average too high, current: {0}, limit: {1}, sleeping".format(la, self.max_la))
+                time.sleep(5)
+            else:
+                self.debug("Load average fine, current: {0}, limit: {1}, proceeding".format(la, self.max_la))
+                break
 
     def set_dependence(self, message_amqp):
         """
