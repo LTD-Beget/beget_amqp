@@ -179,7 +179,7 @@ class AmqpWorker(Process):
             self.working_status = self.WORKING_YES
             # Ждем, пока Load Average на сервере будет меньше чем задан в настройках
             if self.max_la > 0:
-                self.check_load_average()
+                self.wait_load_average()
             self.redis_storage.message_save_start_time(message_amqp)
 
             if not self.is_ttl_expired(message_amqp):
@@ -227,7 +227,7 @@ class AmqpWorker(Process):
         # Если за время работы над сообщением мы получили команду выхода, то выходим
         self.check_allowed_to_live()
 
-    def check_load_average(self):
+    def wait_load_average(self):
         """
         Зависает в цикле если load average больше допустимого, выходит как нагрузка стабилизируется
         :return:
