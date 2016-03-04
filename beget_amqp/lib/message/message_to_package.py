@@ -35,6 +35,9 @@ class MessageToPackage():
             :param expiration: Указывает ttl сообщения в секундах.
             :type expiration: None|int
         """
+        if type(dependence) is dict:
+            dependence = dependence.values()
+        
         assert isinstance(controller, basestring), 'controller must be a string, but is: %s' % repr(controller)
         self.controller = controller
 
