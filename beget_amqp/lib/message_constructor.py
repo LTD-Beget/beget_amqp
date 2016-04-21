@@ -18,6 +18,7 @@ class MessageConstructor:
         """
         Стандартное сообщение из AMQP
         """
+
         body_params = json.loads(body)
 
         # Обязательные данные
@@ -27,6 +28,7 @@ class MessageConstructor:
         # Опциональные данные
         params = body_params.get('params', {})
         callback_list = body_params.get('callbackList')
+        global_request_id = body_params.get('globalReqId')
 
         message_id = properties.message_id
         """:type message_id: None|basestring"""
@@ -46,7 +48,8 @@ class MessageConstructor:
                                 dependence=dependence,
                                 message_id=message_id,
                                 callback_list=callback_list,
-                                expiration=expiration)
+                                expiration=expiration,
+                                global_request_id=global_request_id)
 
     @staticmethod
     def create_message_to_service_by_message_amqp(message):
