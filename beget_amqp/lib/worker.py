@@ -135,6 +135,9 @@ class AmqpWorker(Process):
 
         self.check_allowed_to_live()
 
+        self.sync_manager.start_message_processing()
+        self.debug('started message processing')
+
         # Получаем объект сообщения из сырого body
         message_constructor = MessageConstructor()
         message_amqp = message_constructor.create_message_amqp(body, properties)
@@ -169,6 +172,9 @@ class AmqpWorker(Process):
 
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
+
+        self.sync_manager.stop_message_processing()
+        self.debug('stopped message processing')
 
         self.sync_manager.clear_consume()
 

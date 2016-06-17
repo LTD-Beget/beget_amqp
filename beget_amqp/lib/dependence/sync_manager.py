@@ -41,6 +41,8 @@ class SyncManager(object):
         self.consumer_lock = Lock()
         self.consumer_worker_uid = None
 
+        self.message_processing = Lock()
+
     def set_and_wait(self, message, worker_id=''):
         """
         :type message: MessageAmqp
@@ -124,7 +126,7 @@ class SyncManager(object):
 
     def stop(self):
         # todo: Я не знаю, как еще можно завершить этот процесс, когда родительский процесс уже мертв.
-        self.logger.critical('SyncManager stop pid: %s', os.getpid())
+        self.logger.critical('SyncManager: stop pid: %s', os.getpid())
         os.kill(os.getpid(), 9)
 
     @staticmethod
@@ -147,7 +149,7 @@ class SyncManager(object):
         return self.workers_id_list
 
     def add_worker_id(self, worker_id):
-        self.logger.debug('SyncManager: Add worker id %s to list', worker_id)
+        self.logger.debug('SyncManager: add worker id %s to list', worker_id)
         return self.workers_id_list.append(worker_id)
 
     def remove_worker_id(self, worker_id):
@@ -175,12 +177,12 @@ class SyncManager(object):
         self.consumer_lock.acquire()
 
         if self.consumer_worker_uid == worker_id:
-            self.logger.debug('Allow consume: ' + worker_id + ' worker_id')
+            self.logger.debug('SyncManager: allow consume: ' + worker_id + ' worker_id')
             self.consumer_lock.release()
             return True
 
         if self.consumer_worker_uid is None:
-            self.logger.debug('Allow consume: ' + worker_id + ' None')
+            self.logger.debug('SyncManager: allow consume: ' + worker_id + ' None')
             self.consumer_worker_uid = worker_id
             self.consumer_lock.release()
             return True
@@ -189,7 +191,7 @@ class SyncManager(object):
         return False
 
     def clear_consume(self):
-        self.logger.debug('clear consume: ' + repr(self.consumer_worker_uid))
+        self.logger.debug('SyncManager: clear consume: ' + repr(self.consumer_worker_uid))
         self.consumer_lock.acquire()
         self.consumer_worker_uid = None
         self.consumer_lock.release()
@@ -202,3 +204,13 @@ class SyncManager(object):
 
     def set_message_on_work_done(self, message_amqp):
         self.message_on_work.remove(message_amqp.id)
+
+    def start_message_processing(self):
+        self.logger.debug('SyncManager: start message processing (worker_id: {})'.format(self.consumer_worker_uid))
+        self.message_processing.acquire()
+        self.logger.debug('SyncManager: started message processing (worker_id: {})'.format(self.consumer_worker_uid))
+
+    def stop_message_processing(self):
+        self.logger.debug('SyncManager: stop message processing (worker_id: {})'.format(self.consumer_worker_uid))
+        self.message_processing.release()
+        self.logger.debug('SyncManager: stopped message processing (worker_id: {})'.format(self.consumer_worker_uid))
