@@ -23,11 +23,11 @@ class TestController(amqp.Controller):
 
     def action_sleep(self, sleep_time=10, name=None):
         my_name = name or os.getpid()
-        print '%s:sleep: %s' % (my_name, str(sleep_time))
+        self.logger.debug('%s:start: sleep %s' % (my_name, str(sleep_time)))
         for i in range(1, sleep_time):
             time.sleep(1)
-            print i
-        print '%s:exit' % my_name
+            self.logger.debug('%s:tick: %s [%s]' % (my_name, i, sleep_time))
+        self.logger.debug('%s:exit' % my_name)
 
     #########################
     # Для проверки обратных вызовов:

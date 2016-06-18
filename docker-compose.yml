@@ -1,0 +1,22 @@
+app:
+  build: .
+  volumes:
+    - .:/usr/src
+  volumes_from:
+    - redis
+  links:
+    - rabbitmq
+  command: dumb-init bash -c 'python setup.py develop && exec sleep infinity'
+
+redis:
+  image: redis:3
+  user: root
+  volumes:
+    - /var/run/redis
+    - ./redis.conf:/usr/local/etc/redis/redis.conf
+  command: bash -c 'redis-server /usr/local/etc/redis/redis.conf'
+
+rabbitmq:
+  image: rabbitmq:3
+  environment:
+    - "RABBITMQ_DEFAULT_VHOST=example-vhost"

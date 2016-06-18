@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from multiprocessing import Process
+
+import filelock
+
+from .consumer.storage.consumer_storage_redis import ConsumerStorageRedis
+from .dependence.storage.dependence_storage_redis import DependenceStorageRedis
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
 from .helpers.logger import Logger, uid_logger_wrapper_method
@@ -13,7 +18,6 @@ import signal
 import os
 import time
 import traceback
-import socket
 
 import setproctitle
 
@@ -30,6 +34,8 @@ class AmqpWorker(Process):
     MESSAGE_DONE_YES = '1'  # Сообщение еще не отработано
 
     LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 2  # Время хранения информации в локальном хранилище
+
+    LOCKFILE_TEMPLATE = '/var/run/{}.lock'
 
     def __init__(self,
                  host,
@@ -66,13 +72,35 @@ class AmqpWorker(Process):
         self.uid = uid
         self.sender = sender
         self.max_la = max_la
-        self.redis_storage = MessageStorageRedis(worker_id=self.uid, queue=queue)
+
+        self.consumer_storage = ConsumerStorageRedis(worker_id=self.uid, queue=queue)
+        self.message_storage = MessageStorageRedis(worker_id=self.uid, queue=queue)
+        self.dependence_storage = DependenceStorageRedis(worker_id=self.uid, queue=queue)
 
         # обнуляем
         self.amqp_listener = None
         self.current_message = None  # Для хранения обрабатываемого сообщения
         self.working_status = self.WORKING_NOT  # Получили и работаем над сообщением?
         self.program_status = self.STATUS_START  # Программа должна выполняться и дальше? (Для плавного выхода)
+
+        # create worker lock
+        self.worker_lock = filelock.FileLock(AmqpWorker.get_worker_lockfile(self.uid))
+
+        self.logger.debug("Created worker {} for queue {}".format(self.uid, self.queue))
+
+    @staticmethod
+    def get_worker_lockfile(worker_id):
+        return AmqpWorker.LOCKFILE_TEMPLATE.format(worker_id)
+
+    @staticmethod
+    def is_worker_alive(worker_id):
+        worker_lock = filelock.FileLock(AmqpWorker.get_worker_lockfile(worker_id))
+
+        try:
+            worker_lock.acquire(timeout=0.5)
+            return False
+        except filelock.Timeout:
+            return True
 
     def run(self):
         """
@@ -83,11 +111,17 @@ class AmqpWorker(Process):
         process_title += '_' + self._name
         setproctitle.setproctitle(process_title)
 
-        self._name = self._name + '(' + str(os.getpid()) + ')'
+        self._name += '({})'.format(os.getpid())
+        self._name += '[{}]'.format(self.uid[:8])
 
         # Назначаем сигналы для выхода
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGHUP, self.sig_handler)
+
+        self.debug('Started worker {}'.format(self.uid))
+
+        # hold mutex until we die
+        self.worker_lock.acquire()
 
         # Начинаем слушать AMQP и выполнять задачи полученные из сообщений:
         try:
@@ -97,8 +131,7 @@ class AmqpWorker(Process):
                                             self.virtual_host,
                                             self.queue,
                                             self._on_message,
-                                            self.sync_manager,
-                                            self.uid,
+                                            self.consumer_storage,
                                             self.port,
                                             self.durable,
                                             self.auto_delete,
@@ -128,15 +161,9 @@ class AmqpWorker(Process):
         :param body: тело сообщения
         :type body: basestring
         """
-        self.debug('get message:\n'
-                   '  properties: %s\n'
-                   '  method: %s\n'
-                   '  body: %s', repr(properties), repr(method), repr(body))
+        self.debug('get-message: properties={}, method={}, body={}'.format(properties, method, body))
 
         self.check_allowed_to_live()
-
-        self.sync_manager.start_message_processing()
-        self.debug('started message processing')
 
         # Получаем объект сообщения из сырого body
         message_constructor = MessageConstructor()
@@ -144,9 +171,9 @@ class AmqpWorker(Process):
         message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
 
         # Проверяем в локальном хранилище, что это не дублирующая заявка
-        if self.redis_storage.is_duplicate_message(message_amqp):
-            if self.redis_storage.is_done_message(message_amqp):
-                self.sync_manager.clear_consume()
+        if self.message_storage.is_duplicate_message(message_amqp):
+            if self.message_storage.is_done_message(message_amqp):
+                self.consumer_storage.consumer_release()
                 self.sync_manager.remove_unacknowledged_message_id(message_amqp.id)
                 if not self.no_ack:
                     self.debug('Acknowledge delivery_tag: %s', method.delivery_tag)
@@ -154,11 +181,11 @@ class AmqpWorker(Process):
                 return
             else:
                 worker_id_alive_list = self.sync_manager.get_workers_id()
-                worker_id = self.redis_storage.get_worker_id_by_message(message_amqp)
+                worker_id = self.message_storage.get_worker_id_by_message(message_amqp)
                 if worker_id in worker_id_alive_list:
                     # Todo: Rabbit don't allow get custom or another message.
                     # Todo: Exclude the receipt of this message for this channel
-                    self.sync_manager.clear_consume()
+                    self.consumer_storage.consumer_release()
                     self.sync_manager.add_unacknowledged_message_id(message_amqp.id)
                     time.sleep(30)
                     if not self.no_ack:
@@ -167,26 +194,26 @@ class AmqpWorker(Process):
                     return
 
         # Сохраняем информацию о заявке в локальное хранилище
-        self.redis_storage.message_save(message_amqp, body, properties)
+        self.message_storage.message_save(message_amqp, body, properties)
         self.sync_manager.set_message_on_work(message_amqp)
 
         # Устанавливаем зависимости сообщения
         self.set_dependence(message_amqp)
+        self.debug('set-dependence: properties={}, method={}, body={}'.format(properties, method, body))
 
-        self.sync_manager.stop_message_processing()
-        self.debug('stopped message processing')
-
-        self.sync_manager.clear_consume()
+        self.consumer_storage.consumer_release()
 
         try:
-            self.debug('Wait until the dependence be free')
+            self.debug('Wait until dependence {} to be free'.format(message_amqp.dependence))
             self.wait_dependence(message_amqp)
-            self.debug('Execute callback')
+            self.debug('Dependence {} is ready to execute callback'.format(message_amqp.dependence))
+
             self.working_status = self.WORKING_YES
             # Ждем, пока Load Average на сервере будет меньше чем задан в настройках
             if self.max_la > 0:
                 self.wait_load_average()
-            self.redis_storage.message_save_start_time(message_amqp)
+
+            self.message_storage.message_save_start_time(message_amqp)
 
             if not self.is_ttl_expired(message_amqp):
                 # Основная строчка кода, всего пакета:
@@ -223,7 +250,7 @@ class AmqpWorker(Process):
                 self.error('Exception while send callback: %s\n  %s\n', e.message, traceback.format_exc())
 
         self.sync_manager.set_message_on_work_done(message_amqp)
-        self.redis_storage.message_set_done(message_amqp)
+        self.message_storage.message_set_done(message_amqp)
         self.release_dependence(message_amqp)
         if not self.no_ack:
             self.debug('Acknowledge delivery_tag: %s', method.delivery_tag)
@@ -247,41 +274,41 @@ class AmqpWorker(Process):
                 self.debug("Load average fine, current: {0}, limit: {1}, proceeding".format(la, self.max_la))
                 break
 
-    def set_dependence(self, message_amqp):
+    def set_dependence(self, message):
         """
         Ставим зависимость сообщения в очередь.
-        :type message_amqp: MessageAmqp
+        :type message: MessageAmqp
         """
-        if not message_amqp.dependence:
+        if not message.dependence:
             return
-        try:
-            self.sync_manager.set(message_amqp, self.uid)
-        except socket.error:
-            self.handler_error_sync_manager()
 
-    def wait_dependence(self, message_amqp):
+        self.debug('set-dependence: {}'.format(message.dependence))
+        self.dependence_storage.dependence_set(message)
+
+    def wait_dependence(self, message):
         """
         Ожидаем пока зависимость освободится
-        :type message_amqp: MessageAmqp
+        :type message: MessageAmqp
         """
-        if not message_amqp.dependence:
+        if not message.dependence:
             return
-        try:
-            self.sync_manager.wait(message_amqp)
-        except (IOError, EOFError):
-            self.handler_error_sync_manager()
 
-    def release_dependence(self, message_amqp):
+        self.debug('wait-dependence: {}'.format(message.dependence))
+        while True:
+            if self.dependence_storage.dependence_is_available(message):
+                return True
+            time.sleep(0.1)
+
+    def release_dependence(self, message):
         """
         Освобождаем зависимость
-        :type message_amqp: MessageAmqp
+        :type message: MessageAmqp
         """
-        if not message_amqp.dependence:
+        if not message.dependence:
             return
-        try:
-            self.sync_manager.release(message_amqp)
-        except (IOError, EOFError):
-            self.handler_error_sync_manager()
+
+        self.debug('release-dependence: {}'.format(message.dependence))
+        self.dependence_storage.dependence_release(message)
 
     def sig_handler(self, sig_num, frame):
         """

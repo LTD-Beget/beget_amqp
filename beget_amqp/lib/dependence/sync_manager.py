@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-
-import time
 import os
 
 from multiprocessing.managers import BaseManager
-from multiprocessing import Lock
 
+import filelock
+
+from .storage.dependence_storage_redis import DependenceStorageRedis
 from ..helpers.logger import Logger
 
 
@@ -29,84 +29,27 @@ from ..helpers.logger import Logger
 
 class SyncManager(object):
 
-    def __init__(self):
+    LOCKFILE_TEMPLATE = '/var/run/beget-amqp-{}-{}.lock'
+
+    def __init__(self, amqp_queue):
+        self.logger = Logger.get_logger()
+        self.amqp_queue = amqp_queue
+
         self.workers_id_list = []
         self.unacknowledged_message_id_list = []
-        self.logger = Logger.get_logger()
-        self.dict_of_queue = {}
-        self.lock = Lock()
 
         self.message_on_work = []
-
-        self.consumer_lock = Lock()
         self.consumer_worker_uid = None
 
-        self.message_processing = Lock()
+        # avoid circular imports
+        from beget_amqp import Service
+        self.dependence_storage = DependenceStorageRedis(worker_id=Service.generate_uid(), queue=self.amqp_queue)
 
-    def set_and_wait(self, message, worker_id=''):
-        """
-        :type message: MessageAmqp
-        :type worker_id: basestring
-        """
-        self.set(message, worker_id)
-        self.wait(message)
+        self.logger.debug("SyncManager: creating file locks for '{}' amqp queue".format(self.amqp_queue))
 
-    def wait(self, message):
-        """
-        infinity loop until I got permission to continue
-        :type message: MessageAmqp
-        """
-        self.logger.debug('SyncManager: wait-dependence: %s', repr(message.dependence))
-        while True:
-            if self.is_available_dependence(message):
-                return True
-            time.sleep(0.1)
+        self.lock = filelock.FileLock(self.LOCKFILE_TEMPLATE.format(self.amqp_queue, 'main'))
 
-    def is_available_dependence(self, message):
-        """
-        Check whether our turn
-        :type message: MessageAmqp
-        """
-        for dep in message.dependence:
-            if not dep in self.dict_of_queue:
-                continue
-            dependence_current = self.dict_of_queue[dep][0]
-
-            # compare our id with id first in queue
-            if message.id != dependence_current['message_id']:
-                return False
-        return True
-
-    def set(self, message, worker_id=''):
-        """
-        Set our dependencies in queue
-        :type message: MessageAmqp
-        :type worker_id: basestring
-        """
-        self.logger.debug('SyncManager: set-dependence: %s, worker_id: %s', repr(message.dependence), worker_id)
-        self.lock.acquire()  # in one moment only one worker may write dependence. Otherwise we may get deadlock.
-        for dep in message.dependence:
-            if dep in self.dict_of_queue:
-                # if we have queue by dependence name, we add id in queue
-                self.dict_of_queue[dep].append(dict(message_id=message.id, worker_id=worker_id))
-            else:
-                self.dict_of_queue[dep] = [dict(message_id=message.id, worker_id=worker_id)]
-        self.lock.release()
-
-    def release(self, message):
-        """
-        Release our dependencies from queue
-        :type message: MessageAmqp
-        """
-        self.logger.debug('SyncManager: release-dependence: %s', repr(message.dependence))
-        for dependence_name in message.dependence:
-            if not dependence_name in self.dict_of_queue:
-                continue
-            dependence_list = self.dict_of_queue[dependence_name]
-            for dependence in dependence_list[:]:
-                if not message.id == dependence.get('message_id'):
-                    continue
-                dependence_list.remove(dependence)
+        self.logger.debug("SyncManager: initialized and ready to work")
 
     def release_all_dependence_by_worker_id(self, worker_id):
         """
@@ -114,11 +57,7 @@ class SyncManager(object):
         :type worker_id: basestring
         """
         self.logger.critical('SyncManager: (dead worker?) release all dependence by worker id: %s', worker_id)
-        for dependence_list in self.dict_of_queue.values():
-            for dependence in dependence_list[:]:
-                if not worker_id == dependence.get('worker_id'):
-                    continue
-                dependence_list.remove(dependence)
+        self.dependence_storage.dependence_release_all_by_worker_id(worker_id)
 
     def check_status(self):
         """Заглушка для проверки связи"""
@@ -130,7 +69,7 @@ class SyncManager(object):
         os.kill(os.getpid(), 9)
 
     @staticmethod
-    def get_manager():
+    def get_manager(amqp_queue):
         """
         :return: Объект менеджера передаваемый в multiprocessing воркеры
                  и предоставляющий общие ресурсы для всех воркеров
@@ -143,7 +82,7 @@ class SyncManager(object):
         CreatorSharedManager.register('SyncManager', SyncManager)
         creator_shared_manager = CreatorSharedManager()
         creator_shared_manager.start()
-        return creator_shared_manager.SyncManager()  # ignore this warning of your IDE
+        return creator_shared_manager.SyncManager(amqp_queue)  # ignore this warning of your IDE
 
     def get_workers_id(self):
         return self.workers_id_list
@@ -173,29 +112,6 @@ class SyncManager(object):
         self.unacknowledged_message_id_list.remove(id)
         return True
 
-    def is_allow_consume(self, worker_id):
-        self.consumer_lock.acquire()
-
-        if self.consumer_worker_uid == worker_id:
-            self.logger.debug('SyncManager: allow consume: ' + worker_id + ' worker_id')
-            self.consumer_lock.release()
-            return True
-
-        if self.consumer_worker_uid is None:
-            self.logger.debug('SyncManager: allow consume: ' + worker_id + ' None')
-            self.consumer_worker_uid = worker_id
-            self.consumer_lock.release()
-            return True
-
-        self.consumer_lock.release()
-        return False
-
-    def clear_consume(self):
-        self.logger.debug('SyncManager: clear consume: ' + repr(self.consumer_worker_uid))
-        self.consumer_lock.acquire()
-        self.consumer_worker_uid = None
-        self.consumer_lock.release()
-
     def get_message_on_work(self):
         return self.message_on_work
 
@@ -204,13 +120,3 @@ class SyncManager(object):
 
     def set_message_on_work_done(self, message_amqp):
         self.message_on_work.remove(message_amqp.id)
-
-    def start_message_processing(self):
-        self.logger.debug('SyncManager: start message processing (worker_id: {})'.format(self.consumer_worker_uid))
-        self.message_processing.acquire()
-        self.logger.debug('SyncManager: started message processing (worker_id: {})'.format(self.consumer_worker_uid))
-
-    def stop_message_processing(self):
-        self.logger.debug('SyncManager: stop message processing (worker_id: {})'.format(self.consumer_worker_uid))
-        self.message_processing.release()
-        self.logger.debug('SyncManager: stopped message processing (worker_id: {})'.format(self.consumer_worker_uid))
