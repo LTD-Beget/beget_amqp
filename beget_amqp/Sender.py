@@ -164,7 +164,7 @@ class Sender:
         return channel
 
     def _get_amqp_connection(self, virtual_host):
-        auth = pika.PlainCredentials(str(virtual_host), str(self.password))
+        auth = pika.PlainCredentials(str(self.user), str(self.password))
         connect_params = pika.ConnectionParameters(host=str(self.host),
                                                    port=int(self.port),
                                                    virtual_host=str(virtual_host),

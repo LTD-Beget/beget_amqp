@@ -104,7 +104,7 @@ class Service():
         self._last_worker_id = 0
 
         self.communicator = CommunicateRedis(self.queue)
-        self.sync_manager = SyncManager.get_manager()
+        self.sync_manager = SyncManager.get_manager(amqp_queue=self.queue)
         self.sender = Sender(user, password, host, port, virtual_host)
 
         self.max_la = max_la
@@ -178,7 +178,6 @@ class Service():
                 continue
             self.sync_manager.release_all_dependence_by_worker_id(worker.uid)
             self.sync_manager.remove_worker_id(worker.uid)
-            self.sync_manager.clear_consume()
             if worker.uid in self._worker_id_list_in_killed_process:
                 self._worker_id_list_in_killed_process.remove(worker.uid)
             self._worker_container.remove(worker)
@@ -229,9 +228,14 @@ class Service():
         try:
             # Убиваем воркеров
             for worker in self._worker_container:
-                if not worker.is_alive():
-                    continue
-                worker.terminate()
+                is_alive = False
+                try:
+                    is_alive = worker.is_alive()
+                except AssertionError:
+                    os.kill(worker.pid, signal.SIGTERM)
+
+                if is_alive:
+                    worker.terminate()
         except Exception as e:
             self.debug('when terminate worker: Exception: %s\n  %s', e.message, traceback.format_exc())
         # Выходим

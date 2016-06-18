@@ -80,4 +80,4 @@ class MessageStorageRedis(StorageRedis):
         return self.MESSAGE_PREFIX + ':' + self.queue + ':' + message_amqp.id
 
     def debug(self, msg, *args):
-        self.logger.debug('Redis: ' + msg, *args)
+        self.logger.debug('RedisMessageStore: ' + msg, *args)

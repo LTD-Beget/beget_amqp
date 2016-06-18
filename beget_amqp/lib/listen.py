@@ -21,8 +21,7 @@ class AmqpListen:
                  virtual_host,
                  queue,
                  callback,
-                 sync_manager,
-                 worker_uid,
+                 consumer_storage,
                  port=5672,
                  durable=True,
                  auto_delete=True,
@@ -44,8 +43,7 @@ class AmqpListen:
         self.no_ack = no_ack
         self.prefetch_count = prefetch_count
 
-        self.sync_manager = sync_manager
-        self.worker_uid = worker_uid
+        self.consumer_storage = consumer_storage
 
         self.work_status = self.WORK_RUNNING
 
@@ -87,7 +85,7 @@ class AmqpListen:
 
         while self.work_status == self.WORK_RUNNING:
             self.connection.sleep(0.1)
-            if not self.sync_manager.is_allow_consume(self.worker_uid):
+            if not self.consumer_storage.consumer_is_allowed():
                 continue
 
             for method_frame, properties, body in self.channel.consume(queue=self.queue, no_ack=self.no_ack):
