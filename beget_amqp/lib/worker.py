@@ -35,8 +35,6 @@ class AmqpWorker(Process):
 
     LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 2  # Время хранения информации в локальном хранилище
 
-    LOCKFILE_TEMPLATE = '/var/run/{}.lock'
-
     def __init__(self,
                  host,
                  user,
@@ -73,9 +71,9 @@ class AmqpWorker(Process):
         self.sender = sender
         self.max_la = max_la
 
-        self.consumer_storage = ConsumerStorageRedis(worker_id=self.uid, queue=queue)
-        self.message_storage = MessageStorageRedis(worker_id=self.uid, queue=queue)
-        self.dependence_storage = DependenceStorageRedis(worker_id=self.uid, queue=queue)
+        self.consumer_storage = ConsumerStorageRedis(worker_id=self.uid, amqp_vhost=virtual_host, amqp_queue=queue)
+        self.message_storage = MessageStorageRedis(worker_id=self.uid, amqp_vhost=virtual_host, amqp_queue=queue)
+        self.dependence_storage = DependenceStorageRedis(worker_id=self.uid, amqp_vhost=virtual_host, amqp_queue=queue)
 
         # обнуляем
         self.amqp_listener = None
@@ -90,14 +88,16 @@ class AmqpWorker(Process):
 
     @staticmethod
     def get_worker_lockfile(worker_id):
-        return AmqpWorker.LOCKFILE_TEMPLATE.format(worker_id)
+        # avoid circular imports
+        from beget_amqp import get_lockfile
+        return get_lockfile('worker:{}'.format(worker_id))
 
     @staticmethod
     def is_worker_alive(worker_id):
         worker_lock = filelock.FileLock(AmqpWorker.get_worker_lockfile(worker_id))
 
         try:
-            worker_lock.acquire(timeout=0.5)
+            worker_lock.acquire(timeout=0.1)
             return False
         except filelock.Timeout:
             return True
@@ -187,7 +187,7 @@ class AmqpWorker(Process):
                     # Todo: Exclude the receipt of this message for this channel
                     self.consumer_storage.consumer_release()
                     self.sync_manager.add_unacknowledged_message_id(message_amqp.id)
-                    time.sleep(30)
+                    time.sleep(10)
                     if not self.no_ack:
                         self.debug('No acknowledge delivery_tag: %s', method.delivery_tag)
                         channel.basic_nack(delivery_tag=method.delivery_tag)

@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 import json
-import time
-import sys
 
 import filelock
 
@@ -10,19 +8,18 @@ from .storage_redis import StorageRedis
 
 class DependenceStorageRedis(StorageRedis):
     """
-    Локальное хранение сообщений и информации о нем.
+    Локальное хранение информации о зависимостях между сообщениями.
     """
 
-    LOCKFILE_TEMPLATE = '/var/run/dependence:{}:{}.lock'
-
-    def __init__(self, worker_id, queue, socket="/var/run/redis/redis.sock"):
-        super(DependenceStorageRedis, self).__init__(socket)
+    def __init__(self, worker_id, amqp_vhost, amqp_queue, redis_socket="/var/run/redis/redis.sock"):
+        super(DependenceStorageRedis, self).__init__(redis_socket)
         self.worker_id = worker_id
-        self.queue = queue
+        self.amqp_vhost = amqp_vhost
+        self.amqp_queue = amqp_queue
 
-    def get_dependence_lockfile(self, dependence_name):
-        lockfile = self.LOCKFILE_TEMPLATE.format(self.queue, dependence_name)
-        return lockfile
+        # avoid circular imports
+        from beget_amqp import get_lockfile
+        self.lock = filelock.FileLock(get_lockfile((self.get_dependence_key())))
 
     def dependence_set(self, message):
         """
@@ -35,16 +32,15 @@ class DependenceStorageRedis(StorageRedis):
         self.debug(
             'set-dependence: {} for message {} by worker {}'.format(message.dependence, message.id, self.worker_id))
 
-        for dependence_name in message.dependence:
-            lock = filelock.FileLock(self.get_dependence_lockfile(dependence_name))
-            lock.acquire()
+        self.lock.acquire()
 
+        for dependence_name in message.dependence:
             key = self.get_dependence_key(dependence_name)
             self.debug('set-dependence: name={}, key={}'.format(dependence_name, key))
 
             self.redis.rpush(key, json.dumps(dict(message_id=message.id, worker_id=self.worker_id)))
 
-            lock.release()
+        self.lock.release()
 
     def dependence_release(self, message):
         """
@@ -57,10 +53,9 @@ class DependenceStorageRedis(StorageRedis):
         self.debug(
             'release-dependence: {} for message {} by worker {}'.format(message.dependence, message.id, self.worker_id))
 
-        for dependence_name in message.dependence:
-            lock = filelock.FileLock(self.get_dependence_lockfile(dependence_name))
-            lock.acquire()
+        self.lock.acquire()
 
+        for dependence_name in message.dependence:
             key = self.get_dependence_key(dependence_name)
             self.debug('release-dependence: name={}, key={}'.format(dependence_name, key))
 
@@ -71,7 +66,7 @@ class DependenceStorageRedis(StorageRedis):
                 if message.id == dependence['message_id']:
                     self.redis.lrem(key, 0, dependence_json)
 
-            lock.release()
+        self.lock.release()
 
     def dependence_release_all_by_worker_id(self, worker_id=None):
         if worker_id is None:
@@ -79,12 +74,11 @@ class DependenceStorageRedis(StorageRedis):
 
         self.debug('release-all-dependencies for worker {}'.format(worker_id))
 
+        self.lock.acquire()
+
         dependence_names = self.get_all_dependence_names()
 
         for dependence_name in dependence_names:
-            lock = filelock.FileLock(self.get_dependence_lockfile(dependence_name))
-            lock.acquire()
-
             key = self.get_dependence_key(dependence_name)
             self.debug('release-all-dependencies: name={}, key={}'.format(dependence_name, key))
 
@@ -95,14 +89,19 @@ class DependenceStorageRedis(StorageRedis):
                 if worker_id == dependence['worker_id']:
                     self.redis.lrem(key, 0, dependence_json)
 
-            lock.release()
+        self.lock.release()
 
     def get_all_dependence_names(self):
-        dependence_names = self.redis.keys('{}:{}:*'.format(self.DEPENDENCE_PREFIX, self.queue))
+        dependence_names = self.redis.keys('{}:*'.format(self.get_dependence_key()))
         return dependence_names
 
-    def get_dependence_key(self, dependence_name):
-        return '{}:{}:{}'.format(self.DEPENDENCE_PREFIX, self.queue, dependence_name)
+    def get_dependence_key(self, dependence_name=None):
+        key = '{}:{}:{}'.format(self.DEPENDENCE_PREFIX, self.amqp_vhost, self.amqp_queue)
+
+        if dependence_name is not None:
+            key += ':{}'.format(dependence_name)
+
+        return key
 
     def debug(self, msg, *args):
         self.logger.debug('RedisDependenceStorage: ' + msg, *args)
@@ -122,11 +121,10 @@ class DependenceStorageRedis(StorageRedis):
         self.debug(
             'wait-dependence: testing message {} with dependence {}'.format(message.id, message.dependence))
 
+        self.lock.acquire()
+
         for dependence_name in message.dependence:
             available_status[dependence_name] = True
-
-            lock = filelock.FileLock(self.get_dependence_lockfile(dependence_name))
-            lock.acquire()
 
             key = self.get_dependence_key(dependence_name)
             self.debug('wait-dependence: name={}, key={}'.format(dependence_name, key))
@@ -151,7 +149,7 @@ class DependenceStorageRedis(StorageRedis):
                 # we care about only first message_id here
                 break
 
-            lock.release()
+        self.lock.release()
 
         self.debug('wait-dependence: available-status={}'.format(available_status))
 

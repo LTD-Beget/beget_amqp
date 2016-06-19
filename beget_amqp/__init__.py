@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import uuid
 
 from .Controller import Controller
 from .Handler import Handler
@@ -21,3 +22,11 @@ from ._version import __version__
 def get_transport(user='guest', password='guest', host='localhost', port=5672, vhost=None):
     sender = Sender(user, password, host, port, vhost)
     return sender.get_transport()
+
+
+def get_lockfile(name):
+    return '/var/run/beget_amqp.{}.lock'.format(name)
+
+
+def generate_uuid():
+    return str(uuid.uuid4())

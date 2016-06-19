@@ -2,7 +2,7 @@
 from ..helpers.argument import Argument
 
 
-class MessageToHandler():
+class MessageToHandler(object):
     """
     Сообщение которое передается в Handler
 
