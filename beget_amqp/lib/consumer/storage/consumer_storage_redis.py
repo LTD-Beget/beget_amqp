@@ -1,8 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
-import time
-import sys
-
 import filelock
 
 from .storage_redis import StorageRedis
@@ -13,13 +9,15 @@ class ConsumerStorageRedis(StorageRedis):
     Локальное хранение информации о консьюмерах
     """
 
-    LOCKFILE_TEMPLATE = '/var/run/consumer:{}.lock'
-
-    def __init__(self, worker_id, queue, socket="/var/run/redis/redis.sock"):
-        super(ConsumerStorageRedis, self).__init__(socket)
+    def __init__(self, worker_id, amqp_vhost, amqp_queue, redis_socket="/var/run/redis/redis.sock"):
+        super(ConsumerStorageRedis, self).__init__(redis_socket)
         self.worker_id = worker_id
-        self.queue = queue
-        self.lock = filelock.FileLock(self.LOCKFILE_TEMPLATE.format(self.queue))
+        self.amqp_vhost = amqp_vhost
+        self.amqp_queue = amqp_queue
+
+        # avoid circular imports
+        from beget_amqp import get_lockfile
+        self.lock = filelock.FileLock(get_lockfile(self.get_consumer_key()))
 
     def consumer_release(self):
         self.lock.acquire()
@@ -70,7 +68,7 @@ class ConsumerStorageRedis(StorageRedis):
         return is_allowed
 
     def get_consumer_key(self):
-        return '{}:{}'.format(self.CONSUMER_PREFIX, self.queue)
+        return '{}:{}:{}'.format(self.CONSUMER_PREFIX, self.amqp_vhost, self.amqp_queue)
 
     def debug(self, msg, *args):
         self.logger.debug('RedisConsumerStorage: ' + msg, *args)

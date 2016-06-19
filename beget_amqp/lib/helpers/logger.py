@@ -22,7 +22,7 @@ class LoggerAdapterRequestId(logging.LoggerAdapter):
         return msg, kwargs
 
 
-class Logger():
+class Logger(object):
     """
     Класс для логирования.
     Хранит состояние имени

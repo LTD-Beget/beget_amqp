@@ -5,7 +5,6 @@ import signal
 import sys
 import os
 import traceback
-import uuid
 
 from .lib.helpers.logger import Logger
 from .lib.worker import AmqpWorker
@@ -15,7 +14,7 @@ from .lib.communicate.comunicate_redis import CommunicateRedis
 from ._version import __version__ as version
 
 
-class Service():
+class Service(object):
     """
     Класс который позволяет Вам запустить свою RPC поверх AMQP.
     Работа по средством использования контроллеров.
@@ -104,7 +103,7 @@ class Service():
         self._last_worker_id = 0
 
         self.communicator = CommunicateRedis(self.queue)
-        self.sync_manager = SyncManager.get_manager(amqp_queue=self.queue)
+        self.sync_manager = SyncManager.get_manager(amqp_vhost=self.virtual_host, amqp_queue=self.queue)
         self.sender = Sender(user, password, host, port, virtual_host)
 
         self.max_la = max_la
@@ -115,6 +114,11 @@ class Service():
         # 15 и 1 сигнал приводят к мягкой остановке
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGHUP, self.sig_handler)
+
+    def generate_uuid(self):
+        # avoid circular imports
+        from beget_amqp import generate_uuid
+        return generate_uuid()
 
     def start(self):
         """
@@ -136,7 +140,7 @@ class Service():
                 self.debug('Create worker-%s of %s',
                            (len(self._worker_container) + 1), self.number_workers)
 
-                uid = self.generate_uid()
+                uid = self.generate_uuid()
 
                 worker = AmqpWorker(self.host,
                                     self.user,
@@ -268,10 +272,6 @@ class Service():
 
         # Выходим
         self._status = self.STATUS_STOP
-
-    @staticmethod
-    def generate_uid():
-        return str(uuid.uuid4())
 
     def get_workers_alive_count(self):
         workers_alive_count = len(self._worker_container) - len(self._worker_id_list_in_killed_process)

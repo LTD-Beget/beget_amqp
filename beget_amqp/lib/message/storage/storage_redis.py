@@ -19,6 +19,6 @@ class StorageRedis(object):
 
     LOCAL_STORAGE_LIVE_TIME = 60 * 60 * 24 * 3  # Время хранения информации в локальном хранилище
 
-    def __init__(self, socket="/var/run/redis/redis.sock"):
-        self.redis = redis.StrictRedis(unix_socket_path=socket)
+    def __init__(self, redis_socket="/var/run/redis/redis.sock"):
+        self.redis = redis.StrictRedis(unix_socket_path=redis_socket)
         self.logger = Logger.get_logger()

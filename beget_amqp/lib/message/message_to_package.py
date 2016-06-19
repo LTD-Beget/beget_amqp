@@ -4,7 +4,7 @@ import uuid
 from ..helpers.argument import Argument
 
 
-class MessageToPackage():
+class MessageToPackage(object):
     """
     Сообщение для обработки внутри пакета.
 
@@ -13,7 +13,14 @@ class MessageToPackage():
       - Обозначить обязательные и опциональные параметры AMQP сообщения. Все остальные параметры игнорировать.
     """
 
-    def __init__(self, controller, action, params=None, dependence=None, message_id=None, callback_list=None, expiration=None):
+    def __init__(self,
+                 controller,
+                 action,
+                 params=None,
+                 dependence=None,
+                 message_id=None,
+                 callback_list=None,
+                 expiration=None):
         """
         Сообщение обязано содержать:
             :type controller:basestring
@@ -24,7 +31,7 @@ class MessageToPackage():
             :type params: None|dict
 
             :param dependence: Устраняет конфликты при выполнение нескольких сообщений одновременно.
-            :type dependence: None|list
+            :type dependence: None|list|dict
 
             :param message_id: Обеспечивает возможность различать сообщения
             :type message_id: None|basestring

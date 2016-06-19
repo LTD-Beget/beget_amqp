@@ -8,7 +8,6 @@ import filelock
 from .storage.dependence_storage_redis import DependenceStorageRedis
 from ..helpers.logger import Logger
 
-
 #
 # Структура dict_of_queue:
 # |dict Dependence_key_name:  # <-- имя зависимости
@@ -27,12 +26,13 @@ from ..helpers.logger import Logger
 #               worker_id: '3242323423432423'
 #
 
+
 class SyncManager(object):
 
-    LOCKFILE_TEMPLATE = '/var/run/beget-amqp-{}-{}.lock'
-
-    def __init__(self, amqp_queue):
+    def __init__(self, amqp_vhost, amqp_queue):
         self.logger = Logger.get_logger()
+
+        self.amqp_vhost = amqp_vhost
         self.amqp_queue = amqp_queue
 
         self.workers_id_list = []
@@ -42,12 +42,23 @@ class SyncManager(object):
         self.consumer_worker_uid = None
 
         # avoid circular imports
-        from beget_amqp import Service
-        self.dependence_storage = DependenceStorageRedis(worker_id=Service.generate_uid(), queue=self.amqp_queue)
+        from beget_amqp import generate_uuid
+        self.dependence_storage = DependenceStorageRedis(
+            worker_id=generate_uuid(),
+            amqp_vhost=self.amqp_vhost,
+            amqp_queue=self.amqp_queue
+        )
 
         self.logger.debug("SyncManager: creating file locks for '{}' amqp queue".format(self.amqp_queue))
 
-        self.lock = filelock.FileLock(self.LOCKFILE_TEMPLATE.format(self.amqp_queue, 'main'))
+        # avoid circular imports
+        from beget_amqp import get_lockfile
+        self.lock = filelock.FileLock(get_lockfile(
+            'sync_manager:{}:{}'.format(
+                self.amqp_vhost,
+                self.amqp_queue
+            )
+        ))
 
         self.logger.debug("SyncManager: initialized and ready to work")
 
@@ -69,7 +80,7 @@ class SyncManager(object):
         os.kill(os.getpid(), 9)
 
     @staticmethod
-    def get_manager(amqp_queue):
+    def get_manager(amqp_vhost, amqp_queue):
         """
         :return: Объект менеджера передаваемый в multiprocessing воркеры
                  и предоставляющий общие ресурсы для всех воркеров
@@ -77,12 +88,12 @@ class SyncManager(object):
         """
 
         class CreatorSharedManager(BaseManager):
-            pass
+            SyncManager = None
 
         CreatorSharedManager.register('SyncManager', SyncManager)
         creator_shared_manager = CreatorSharedManager()
         creator_shared_manager.start()
-        return creator_shared_manager.SyncManager(amqp_queue)  # ignore this warning of your IDE
+        return creator_shared_manager.SyncManager(amqp_vhost, amqp_queue)  # ignore this warning of your IDE
 
     def get_workers_id(self):
         return self.workers_id_list
@@ -98,18 +109,18 @@ class SyncManager(object):
     def get_unacknowledged_message_id_list(self):
         return self.unacknowledged_message_id_list
 
-    def add_unacknowledged_message_id(self, id):
-        self.logger.debug('SyncManager: add unacknowledged message: %s', id)
-        if id in self.unacknowledged_message_id_list:
+    def add_unacknowledged_message_id(self, message_id):
+        self.logger.debug('SyncManager: add unacknowledged message: %s', message_id)
+        if message_id in self.unacknowledged_message_id_list:
             return False
-        self.unacknowledged_message_id_list.append(id)
+        self.unacknowledged_message_id_list.append(message_id)
         return True
 
-    def remove_unacknowledged_message_id(self, id):
-        self.logger.debug('SyncManager: remove unacknowledged message: %s', id)
-        if id not in self.unacknowledged_message_id_list:
+    def remove_unacknowledged_message_id(self, message_id):
+        self.logger.debug('SyncManager: remove unacknowledged message: %s', message_id)
+        if message_id not in self.unacknowledged_message_id_list:
             return False
-        self.unacknowledged_message_id_list.remove(id)
+        self.unacknowledged_message_id_list.remove(message_id)
         return True
 
     def get_message_on_work(self):
