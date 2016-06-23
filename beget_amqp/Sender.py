@@ -62,12 +62,13 @@ class Sender:
         message = {
             'controller': controller,
             'action': action,
-            'params': params or {}
+            'params': params or {},
+            'globalReqId': self.logger.static_global_request_id
         }
         body = self.dict_to_body(message)
 
         properties = {
-            'message_id': str(uuid.uuid4())
+            'message_id': str(uuid.uuid4()),
         }
 
         if dependence:

@@ -8,7 +8,7 @@ from .consumer.storage.consumer_storage_redis import ConsumerStorageRedis
 from .dependence.storage.dependence_storage_redis import DependenceStorageRedis
 from .message_constructor import MessageConstructor
 from .listen import AmqpListen
-from .helpers.logger import Logger, uid_logger_wrapper_method
+from .helpers.logger import Logger, uid_logger_wrapper_method, LoggerAdapterRequestId
 from .message.storage.message_storage_redis import MessageStorageRedis
 from ..Callbacker import Callbacker
 
@@ -169,6 +169,8 @@ class AmqpWorker(Process):
         message_constructor = MessageConstructor()
         message_amqp = message_constructor.create_message_amqp(body, properties)
         message_to_service = message_constructor.create_message_to_service_by_message_amqp(message_amqp)
+
+        LoggerAdapterRequestId.static_global_request_id = message_amqp.global_request_id
 
         # Проверяем в локальном хранилище, что это не дублирующая заявка
         if self.message_storage.is_duplicate_message(message_amqp):

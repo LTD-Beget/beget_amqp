@@ -20,7 +20,8 @@ class MessageToPackage(object):
                  dependence=None,
                  message_id=None,
                  callback_list=None,
-                 expiration=None):
+                 expiration=None,
+                 global_request_id=None):
         """
         Сообщение обязано содержать:
             :type controller:basestring
@@ -41,6 +42,9 @@ class MessageToPackage(object):
 
             :param expiration: Указывает ttl сообщения в секундах.
             :type expiration: None|int
+
+            :param global_request_id: Обеспечивает возможность отследить весь флоу по всем слоям
+            :type global_request_id: None|basestring
         """
         if type(dependence) is dict:
             dependence = dependence.values()
@@ -50,6 +54,10 @@ class MessageToPackage(object):
 
         assert isinstance(action, basestring), 'action must be a string, but is: %s' % repr(action)
         self.action = action
+
+        self.global_request_id = Argument.check_type(
+                global_request_id,
+                basestring, None, strict_type=(type(None), basestring))
 
         self.params = Argument.check_type(params, dict, {}, strict_type=(type(None), list, dict))
         self.dependence = Argument.check_type(dependence, list, [], strict_type=(type(None), list))
