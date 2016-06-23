@@ -56,7 +56,16 @@ class Sender:
         vhost, queue, controller, action = self._parse_path(path)
 
         # dirty hack for pyportal-amqp callbacks
-        user = self.vhost if use_vhost_as_user else self.user
+        user = vhost if use_vhost_as_user else self.user
+
+        self.logger.debug(
+            (
+                'Sender: send: '
+                'user={user}, vhost={vhost}, queue={queue}, controller={controller}, action={action}'
+            ).format(
+                user=user, vhost=vhost, queue=queue, controller=controller, action=action
+            )
+        )
 
         self.send_by_args(queue, controller, action, params=params, vhost=vhost, user=user)
 
@@ -121,10 +130,11 @@ class Sender:
         properties = Argument.check_type(properties, dict, {}, strict_type=(type(None), dict))
 
         self.logger.debug(
-            'Sender: send message with: user={user}, password={password}, vhost={vhost}, queue={queue}'.format(
-                user=user, password=password, vhost=vhost, queue=queue
-            ) +
-            'body={body}, properties={properties}'.format(
+            (
+                'Sender: send message with: user={user}, password={password}, vhost={vhost}, queue={queue},'
+                ' body={body}, properties={properties}'
+            ).format(
+                user=user, password=password, vhost=vhost, queue=queue,
                 body=body, properties=properties
             )
         )
