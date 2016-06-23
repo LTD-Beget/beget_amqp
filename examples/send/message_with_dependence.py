@@ -23,7 +23,7 @@ for i in range(1, 100):
 
     dependencies = []
     for useless in range(1, random.randint(0, 10)):
-        #Рандомное количество рандомных зависимостей
+        # Рандомное количество рандомных зависимостей
         dependencies.append(str(random.randint(1, 9)))
 
     print i, 'Dependencies: %s' % repr(dependencies)
@@ -31,11 +31,8 @@ for i in range(1, 100):
     # Использование разных способов отправки:
     if random.getrandbits(1):
         # Через более высокий уровень, аргументы:
-        sender.send_by_args(conf.AMQP_QUEUE,
-                            controller='test',
-                            action='sleep',
-                            params={'sleep_time': 3, 'name': str(i) + '-up_level'},
-                            dependence=dependencies)
+        sender.send_by_args(conf.AMQP_QUEUE, controller='test', action='sleep',
+                            params={'sleep_time': 3, 'name': str(i) + '-up_level'}, dependence=dependencies)
 
     else:
         # Через кастомное создание письма и свойств:
@@ -55,8 +52,4 @@ for i in range(1, 100):
             }
         }
 
-        sender.send_low_level(
-            conf.AMQP_QUEUE,
-            body,
-            properties=properties
-        )
+        sender.send_low_level(conf.AMQP_QUEUE, body, properties=properties)

@@ -23,7 +23,4 @@ msg = {
 
 body = sender.dict_to_body(msg)
 
-sender.send_low_level(
-    conf.AMQP_QUEUE,
-    body,
-)
+sender.send_low_level(conf.AMQP_QUEUE, body)

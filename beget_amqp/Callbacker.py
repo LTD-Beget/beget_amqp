@@ -66,10 +66,12 @@ class Callbacker:
 
         transport = sender.get_transport(transport_name)
         if not transport:
-            logger.debug('Callbacker: not found registered transport:%s', transport_name)
+            logger.debug('Callbacker: not found registered transport: {}'.format(transport_name))
             return False
 
-        logger.debug('Callbacker: send by:\n  transport:%s\n  path:%s\n  params:%s', transport_name, path, repr(params))
+        logger.debug('Callbacker: params: transport={}, path={}, params={}'.format(
+            transport_name, path, repr(params)
+        ))
 
         params = Argument.check_type(params, dict, {}, strict_type=(type(None), dict))
 
@@ -79,4 +81,4 @@ class Callbacker:
                 params['result'] = params.copy()
             params.update(data_callback)
 
-        transport.send(path, params)
+        transport.send(path, params, use_vhost_as_user=True)

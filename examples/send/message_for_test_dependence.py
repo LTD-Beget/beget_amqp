@@ -45,30 +45,26 @@ def get_property(dependence):
         }
     }
 
-sender.send_low_level(conf.AMQP_QUEUE,
-                      get_body(10, '(1) RUN {1} [one, two] Две первые зависимости'),
+
+sender.send_low_level(conf.AMQP_QUEUE, get_body(10, '(1) RUN {1} [one, two] Две первые зависимости'),
                       properties=get_property(['one', 'two']))
 
-sender.send_low_level(conf.AMQP_QUEUE,
-                      get_body(3, '(2) RUN {2} [one] Совместно выполняемая-1'),
+sender.send_low_level(conf.AMQP_QUEUE, get_body(3, '(2) RUN {2} [one] Совместно выполняемая-1'),
                       properties=get_property(['one']))
 
-sender.send_low_level(conf.AMQP_QUEUE,
-                      get_body(3, '(3) RUN {2} [two] Совместно выполняемая-2'),
+sender.send_low_level(conf.AMQP_QUEUE, get_body(3, '(3) RUN {2} [two] Совместно выполняемая-2'),
                       properties=get_property(['two']))
 
 sender.send_low_level(conf.AMQP_QUEUE,
                       get_body(20, '(4) RUN {3} [one, two, bravo] Долгая зависимость после первых трех'),
                       properties=get_property(['one', 'two', 'bravo']))
 
-sender.send_low_level(conf.AMQP_QUEUE,
-                      get_body(3, '(5) RUN {4} [bravo] Освобожденная после долгой'),
+sender.send_low_level(conf.AMQP_QUEUE, get_body(3, '(5) RUN {4} [bravo] Освобожденная после долгой'),
                       properties=get_property(['bravo']))
 
 sender.send_low_level(conf.AMQP_QUEUE,
                       get_body(3, '(6) RUN {1} [foxtrot] Завершится первой, так как без конкурентной зависимости'),
                       properties=get_property(['foxtrot']))
 
-sender.send_low_level(conf.AMQP_QUEUE,
-                      get_body(3, '(7) RUN {1} [] Завершится второй, так как без зависимостей'),
+sender.send_low_level(conf.AMQP_QUEUE, get_body(3, '(7) RUN {1} [] Завершится второй, так как без зависимостей'),
                       properties=get_property([]))

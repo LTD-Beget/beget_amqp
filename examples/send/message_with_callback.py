@@ -13,11 +13,11 @@ import examples.config as conf
 
 transport = 'msgpack'
 
-#server/controller/action
+# server/controller/action
 path = 'kon_server/test/'
 
 
-class Message:
+class Message(object):
     get_error = {
         'controller': 'test',
         'action': 'error',
@@ -70,7 +70,4 @@ sender = Sender(
 print Message.get_error
 body = sender.dict_to_body(Message.get_error_with_custom_data)
 
-sender.send_low_level(
-    conf.AMQP_QUEUE,
-    body,
-)
+sender.send_low_level(conf.AMQP_QUEUE, body)

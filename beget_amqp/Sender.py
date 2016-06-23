@@ -38,12 +38,13 @@ class Sender:
             self.TRANSPORT_AMQP: self
         }
 
-    def send(self, path, params=None):
+    def send(self, path, params=None, use_vhost_as_user=False):
         """
         Отправка данных через amqp с использованием path строки.
         Задачи:
           - Класс может быть представлен в качестве транспорта @see Транспорт в README
 
+        :param use_vhost_as_user:
         :param path: Строка указывающая путь отправки. Пример:
             - 'vhost/queue/controller/action'
             - 'queue/controller/action'  # используется vhost указанный в self.vhost
@@ -53,11 +54,24 @@ class Sender:
         :type params: dict|None
         """
         vhost, queue, controller, action = self._parse_path(path)
-        self.send_by_args(queue, controller, action, params=params, vhost=vhost)
 
-    def send_by_args(self, queue, controller, action, params=None, dependence=None, vhost=None):
+        # dirty hack for pyportal-amqp callbacks
+        user = self.vhost if use_vhost_as_user else self.user
+
+        self.send_by_args(queue, controller, action, params=params, vhost=vhost, user=user)
+
+    def send_by_args(self, queue, controller, action, params=None, dependence=None, vhost=None, user=None,
+                     password=None):
         """
         Подготавливает стандартный формат сообщения и отправляет сообещение
+        :param queue:
+        :param controller:
+        :param action:
+        :param params:
+        :param dependence:
+        :param vhost:
+        :param user:
+        :param password:
         """
         message = {
             'controller': controller,
@@ -74,14 +88,18 @@ class Sender:
             dependence = Argument.check_type(dependence, list, [], strict_type=list)
             properties['headers'] = {'dependence': dependence}
 
-        self.send_low_level(queue, body, properties, vhost)
+        self.send_low_level(queue, body, properties, vhost=vhost, user=user, password=password)
 
-    def send_low_level(self, queue, body, properties=None, vhost=None):
+    def send_low_level(self, queue, body, properties=None, vhost=None, user=None, password=None):
         """
         Предоставляет отправку с полным контролем тела письма
 
+        :param user:
+        :param password:
         :type queue: basestring
         :type vhost: basestring
+        :type user: basestring
+        :type password: basestring
 
         :param body: тело письма.
         :type body: basestring
@@ -90,17 +108,27 @@ class Sender:
         :type properties: dict
         """
         vhost = vhost or self.vhost
+        user = user or self.user
+        password = password or self.password
+
+        assert isinstance(user, basestring), 'vhost must be a string, but is: %s' % repr(user)
+        assert isinstance(password, basestring), 'vhost must be a string, but is: %s' % repr(password)
         assert isinstance(vhost, basestring), 'vhost must be a string, but is: %s' % repr(vhost)
         assert isinstance(queue, basestring), 'queue must be a string, but is: %s' % repr(queue)
         assert isinstance(body, basestring), 'body must be a string, but is: %s' % repr(body)
+
         properties = Argument.check_type(properties, dict, {}, strict_type=(type(None), dict))
 
         self.logger.debug(
-            'Sender: send message with:\n  vhost:%s\n  queue:%s\n  body:%s  \nproperties:%s',
-            vhost, queue, body, properties
+            'Sender: send message with: user={user}, password={password}, vhost={vhost}, queue={queue}'.format(
+                user=user, password=password, vhost=vhost, queue=queue
+            ) +
+            'body={body}, properties={properties}'.format(
+                body=body, properties=properties
+            )
         )
 
-        connection = self._get_amqp_connection(vhost)
+        connection = self._get_amqp_connection(vhost, user, password)
         channel = self._get_amqp_channel(connection, queue)
 
         properties = pika.BasicProperties(**properties)
@@ -163,8 +191,8 @@ class Sender:
 
         return channel
 
-    def _get_amqp_connection(self, virtual_host):
-        auth = pika.PlainCredentials(str(self.user), str(self.password))
+    def _get_amqp_connection(self, virtual_host, user, password):
+        auth = pika.PlainCredentials(str(user), str(password))
         connect_params = pika.ConnectionParameters(host=str(self.host),
                                                    port=int(self.port),
                                                    virtual_host=str(virtual_host),

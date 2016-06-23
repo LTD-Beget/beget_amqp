@@ -5,7 +5,6 @@ import os
 import sys
 sys.path.insert(0, os.getcwd())
 
-import random
 import uuid
 
 from beget_amqp import Sender
@@ -35,8 +34,4 @@ properties = {
     'message_id': str(uuid.uuid4())
 }
 
-sender.send_low_level(
-    conf.AMQP_QUEUE,
-    body,
-    properties=properties
-)
+sender.send_low_level(conf.AMQP_QUEUE, body, properties=properties)
