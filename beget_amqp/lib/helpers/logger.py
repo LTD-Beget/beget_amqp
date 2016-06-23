@@ -10,6 +10,15 @@ class LoggerAdapterRequestId(logging.LoggerAdapter):
     Предоставляет обертку для лога, отвечающую за работу с uid
     """
 
+    static_global_request_id = None
+    static_platform = 'pyportal'
+    static_handler = 'amqp'
+
+    def __init__(self, logger, extra):
+        super(LoggerAdapterRequestId, self).__init__(logger, extra)
+        self.extra['platform'] = self.static_platform
+        self.extra['handler'] = self.static_handler
+
     def request_id_generate(self):
         self.logger.request_id = str(uuid.uuid4())[:8]
 
@@ -17,7 +26,15 @@ class LoggerAdapterRequestId(logging.LoggerAdapter):
         self.logger.request_id = ''
 
     def process(self, msg, kwargs):
+        self.extra['global_request_id'] = self.static_global_request_id
+
+        if 'extra' in kwargs.keys():
+            kwargs['extra'].update(self.extra)
+        else:
+            kwargs['extra'] = self.extra
+
         if hasattr(self.logger, 'request_id') and self.logger.request_id:
+            self.extra['request_id'] = self.logger.request_id
             return '[id:%s] %s' % (self.logger.request_id, msg), kwargs
         return msg, kwargs
 
