@@ -97,7 +97,7 @@ class AmqpWorker(Process):
         worker_lock = filelock.FileLock(AmqpWorker.get_worker_lockfile(worker_id))
 
         try:
-            worker_lock.acquire(timeout=0.1)
+            worker_lock.acquire(timeout=0)
             return False
         except filelock.Timeout:
             return True

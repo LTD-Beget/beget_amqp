@@ -3,7 +3,7 @@ set -e
 
 export PYTHONUNBUFFERED=1
 
-LOGFILE=run.log
+LOGFILE=run_single5.log
 
 >$LOGFILE
 
@@ -11,6 +11,6 @@ LOGFILE=run.log
 
 sleep 5
 
-./send/message_for_test_dependence.py &
+./send/message_for_test_single_dependence.py &
 
 tail -f $LOGFILE

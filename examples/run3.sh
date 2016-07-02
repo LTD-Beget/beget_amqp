@@ -3,14 +3,16 @@ set -e
 
 export PYTHONUNBUFFERED=1
 
->run3.log
+LOGFILE=run3.log
 
-./run_with_debugging.py --workers=2 amqp-1 1>>run3.log 2>&1 &
-./run_with_debugging.py --workers=2 amqp-2 1>>run3.log 2>&1 &
-./run_with_debugging.py --workers=2 amqp-3 1>>run3.log 2>&1 &
+>$LOGFILE
+
+for i in `seq 1 3`; do
+    ./run_with_debugging.py --workers=2 amqp-$i 1>>$LOGFILE 2>&1 &
+done
 
 sleep 5
 
 ./send/message_for_test_dependence.py &
 
-tail -f run3.log
+tail -f $LOGFILE

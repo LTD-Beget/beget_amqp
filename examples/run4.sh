@@ -3,12 +3,13 @@ set -e
 
 export PYTHONUNBUFFERED=1
 
->run4.log
+LOGFILE=run4.log
 
-./run_with_debugging.py --workers=2 amqp-1 1>>run4.log 2>&1 &
-./run_with_debugging.py --workers=2 amqp-2 1>>run4.log 2>&1 &
-./run_with_debugging.py --workers=2 amqp-3 1>>run4.log 2>&1 &
-./run_with_debugging.py --workers=2 amqp-4 1>>run4.log 2>&1 &
+>$LOGFILE
+
+for i in `seq 1 4`; do
+    ./run_with_debugging.py --workers=2 amqp-$i 1>>$LOGFILE 2>&1 &
+done
 
 sleep 5
 
